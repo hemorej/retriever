@@ -1,7 +1,10 @@
 (function () {
-  const { createApp, reactive, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
+  const { createApp, reactive, ref, computed, onMounted, onUnmounted, nextTick, watch } = Vue;
 
   // ---------- helpers ----------
+  // Fixed column count for the main grid — the thumbnail-size slider changes
+  // row height, not column count, matching the design's fixed 6-up layout.
+  const GRID_COLS = 6;
   const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff']);
   function isImagePath(p) {
     const i = p.lastIndexOf('.');
@@ -595,10 +598,60 @@
 
       const expandedGroupList = computed(() => state.groups.filter((g) => state.expandedGroups.has(g.id)));
 
-      // No virtualized grid yet — cap how many tiles get mounted at once so a
-      // huge folder degrades to "narrow your view" instead of freezing the window.
-      const renderCap = 1500;
-      const renderedEntries = computed(() => gridEntries.value.slice(0, renderCap));
+      // ---------- grid virtualization ----------
+      // Folders with tens of thousands of files used to hang the renderer by
+      // mounting one Vue-reactive tile per file. Instead we mount only the
+      // rows overlapping the scroll viewport (plus overscan) and keep the
+      // rest of the grid's height alive with a single sizer element placed
+      // at the true last row/column via CSS grid explicit placement — the
+      // scrollbar and scroll math behave exactly as if every tile existed.
+      const GRID_OVERSCAN_ROWS = 4;
+      const gridAreaEl = ref(null);
+      const gridScrollTop = ref(0);
+      const gridViewportHeight = ref(600);
+      const tileRowExtra = ref(30); // measured: tile height beyond the thumbnail itself
+      let gridScrollQueued = false;
+      function onGridScroll(e) {
+        if (gridScrollQueued) return;
+        gridScrollQueued = true;
+        requestAnimationFrame(() => {
+          gridScrollQueued = false;
+          if (gridAreaEl.value) gridScrollTop.value = gridAreaEl.value.scrollTop;
+        });
+      }
+      function measureTileRowExtra() {
+        const tile = document.querySelector('.tile-grid .tile');
+        if (!tile) return;
+        const extra = tile.offsetHeight - state.thumbSize;
+        if (extra > 0 && Math.abs(extra - tileRowExtra.value) > 1) tileRowExtra.value = extra;
+      }
+      const gridRowHeight = computed(() => state.thumbSize + tileRowExtra.value);
+      const gridRowStride = computed(() => gridRowHeight.value + 16); // 16 = .tile-grid row gap
+      const gridTotalRows = computed(() => Math.ceil(gridEntries.value.length / GRID_COLS));
+      const gridStartRow = computed(() => Math.max(0, Math.floor(gridScrollTop.value / gridRowStride.value) - GRID_OVERSCAN_ROWS));
+      const gridEndRow = computed(() => Math.min(
+        gridTotalRows.value,
+        Math.ceil((gridScrollTop.value + gridViewportHeight.value) / gridRowStride.value) + GRID_OVERSCAN_ROWS,
+      ));
+      const gridStartIndex = computed(() => gridStartRow.value * GRID_COLS);
+      const renderedEntries = computed(() => gridEntries.value.slice(gridStartIndex.value, gridEndRow.value * GRID_COLS));
+      function tileGridPosition(offset) {
+        const idx = gridStartIndex.value + offset;
+        return { gridColumn: (idx % GRID_COLS) + 1, gridRow: Math.floor(idx / GRID_COLS) + 1 };
+      }
+
+      function ensureRowVisible(path) {
+        const idx = gridEntries.value.findIndex((e) => (e.type === 'file' ? e.file.path : e.group.keyPath) === path);
+        if (idx === -1 || !gridAreaEl.value) return;
+        const row = Math.floor(idx / GRID_COLS);
+        const top = row * gridRowStride.value;
+        const bottom = top + gridRowHeight.value;
+        const el = gridAreaEl.value;
+        if (top < el.scrollTop) el.scrollTop = Math.max(0, top - 8);
+        else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight + 8;
+      }
+
+      let gridResizeObserver = null;
 
       const navOrder = computed(() => {
         const order = [];
@@ -854,11 +907,11 @@
         if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
           e.preventDefault();
           const cur = order.indexOf(activePath.value);
-          const cols = 6;
-          const delta = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' ? -cols : cols;
+          const delta = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' ? -GRID_COLS : GRID_COLS;
           const next = order[Math.min(Math.max(cur + delta, 0), order.length - 1)] || order[0];
           if (next) {
-            if (state.viewMode === 'viewer') selectSingle(next); else selectSingle(next);
+            selectSingle(next);
+            if (state.viewMode === 'grid') ensureRowVisible(next);
           }
           return;
         }
@@ -903,10 +956,20 @@
         window.addEventListener('keydown', onKeydown);
         window.addEventListener('keyup', onKeyup);
         window.addEventListener('click', () => { state.contextMenu.open = false; state.tagMenu.open = false; });
+
+        if (gridAreaEl.value) {
+          gridViewportHeight.value = gridAreaEl.value.clientHeight;
+          gridResizeObserver = new ResizeObserver(() => {
+            gridViewportHeight.value = gridAreaEl.value.clientHeight;
+          });
+          gridResizeObserver.observe(gridAreaEl.value);
+        }
+        watch(() => [state.thumbSize, renderedEntries.value.length], () => nextTick(measureTileRowExtra), { immediate: true });
       });
       onUnmounted(() => {
         window.removeEventListener('keydown', onKeydown);
         window.removeEventListener('keyup', onKeyup);
+        if (gridResizeObserver) gridResizeObserver.disconnect();
       });
 
       // ---------- thumb size slider ----------
@@ -928,7 +991,8 @@
         TAGS, tagMeta, extname, basename, stripExt,
         chooseFolder, useDefaultFolder, beginWatch,
         groupMembership, groupById, allFiles, tagCounts, typeCounts, visibleFiles, sortedFiles,
-        gridEntries, renderedEntries, renderCap, expandedGroupList, navOrder, activePath, activeFile, activeGroupId, systemState, isNew,
+        gridEntries, renderedEntries, expandedGroupList, navOrder, activePath, activeFile, activeGroupId, systemState, isNew,
+        gridAreaEl, onGridScroll, tileGridPosition, gridRowHeight, gridTotalRows,
         onTileClick, selectSingle, selectAll,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
         rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup,
@@ -1019,7 +1083,7 @@
           </div>
 
           <!-- grid / system states -->
-          <div class="grid-area" :style="{ '--cols': 6, '--thumb-h': state.thumbSize + 'px' }" @click="state.contextMenu.open = false">
+          <div class="grid-area" ref="gridAreaEl" @scroll="onGridScroll" :style="{ '--cols': 6, '--thumb-h': state.thumbSize + 'px' }" @click="state.contextMenu.open = false">
 
             <template v-if="systemState === 'no-folder'">
               <div class="state-pane">
@@ -1108,15 +1172,10 @@
                 <span>· {{ sortedFiles.length }} of {{ allFiles.length }} shown</span>
               </div>
 
-              <div class="filter-line" v-if="gridEntries.length > renderCap">
-                <span class="label">showing first {{ renderCap }} of {{ gridEntries.length }}</span>
-                <span>· narrow with search or a filter to see the rest</span>
-              </div>
+              <div class="tile-grid" :style="{ '--row-h': gridRowHeight + 'px' }">
+                <template v-for="(entry, i) in renderedEntries" :key="entry.type === 'group' ? entry.group.id : entry.file.path">
 
-              <div class="tile-grid">
-                <template v-for="entry in renderedEntries" :key="entry.type === 'group' ? entry.group.id : entry.file.path">
-
-                  <div v-if="entry.type === 'file'" class="tile" :class="{ selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
+                  <div v-if="entry.type === 'file'" class="tile" :style="tileGridPosition(i)" :class="{ selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
                        @click="onTileClick($event, entry.file.path)" @dblclick="openViewer(entry.file.path)"
                        @contextmenu="openFileContextMenu($event, entry.file.path)">
                     <div class="tile-thumb">
@@ -1132,7 +1191,7 @@
                     </div>
                   </div>
 
-                  <div v-else class="tile" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
+                  <div v-else class="tile" :style="tileGridPosition(i)" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
                     <div class="tile-stack">
                       <div class="layer layer1"></div>
                       <div class="layer layer2"></div>
@@ -1144,7 +1203,11 @@
 
                 </template>
 
-                <div class="group-band" v-for="g in expandedGroupList" :key="g.id">
+                <!-- Explicit rows for auto-flowing content below the virtualized
+                     tiles: without a fixed grid-row, CSS grid would drop these
+                     into whatever earlier row is currently unoccupied (i.e. any
+                     scrolled-past virtualized row), not visually below the grid. -->
+                <div class="group-band" v-for="(g, gi) in expandedGroupList" :key="g.id" :style="{ gridRow: gridTotalRows + 1 + gi, gridColumn: '1 / -1' }">
                   <div class="group-band-head">
                     <span>▾ group "{{ g.name }}" · {{ g.memberPaths.length }} items</span>
                     <span class="actions">
@@ -1153,7 +1216,7 @@
                       <span @click="ungroup(g.id)">ungroup</span>
                     </span>
                   </div>
-                  <div class="tile-grid" style="--thumb-h:104px">
+                  <div class="tile-grid" style="--thumb-h:104px; --row-h:auto">
                     <template v-for="p in g.memberPaths" :key="p">
                       <div v-if="state.files.get(p)" class="tile"
                            :class="{ selected: state.selection.includes(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
@@ -1163,6 +1226,8 @@
                     </template>
                   </div>
                 </div>
+
+                <div class="grid-sizer" :style="{ gridColumn: 1, gridRow: gridTotalRows + 1 + expandedGroupList.length }"></div>
               </div>
             </template>
 

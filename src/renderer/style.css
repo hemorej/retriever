@@ -176,7 +176,11 @@ body {
 .filter-line .label { color: var(--accent-text); }
 .filter-chip { padding: 2px 7px; border-radius: 11px; background: var(--accent-tint-strong); color: var(--accent-text); }
 
-.tile-grid { display: grid; grid-template-columns: repeat(var(--cols, 6), minmax(0, 1fr)); gap: 16px 18px; align-content: start; }
+.tile-grid { display: grid; grid-template-columns: repeat(var(--cols, 6), minmax(0, 1fr)); grid-auto-rows: var(--row-h, 140px); gap: 16px 18px; align-content: start; }
+/* Explicitly placed at the grid's true last row so the scroll height (and
+   therefore scroll math) matches what it would be if every tile — not just
+   the virtualized window around the viewport — were actually mounted. */
+.grid-sizer { width: 1px; height: 1px; visibility: hidden; }
 
 .tile { display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
 .tile-thumb {
