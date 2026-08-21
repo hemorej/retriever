@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('retriever', {
   openInExternalEditor: (filePath) => ipcRenderer.invoke('open-in-external-editor', filePath),
   listSubfolders: (dir) => ipcRenderer.invoke('list-subfolders', dir),
   getImagePreview: (filePath) => ipcRenderer.invoke('get-image-preview', filePath),
+  getThumbnail: (filePath) => ipcRenderer.invoke('get-thumbnail', filePath),
   loadSession: () => ipcRenderer.invoke('load-session'),
   saveSession: (session) => ipcRenderer.invoke('save-session', session),
   onFsEvent: (callback) => {

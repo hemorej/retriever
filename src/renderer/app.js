@@ -446,6 +446,7 @@
         expandedFolders: reactive(new Set()),
         subfoldersCache: reactive(new Map()),
         imagePreviews: reactive(new Map()),
+        gridThumbs: reactive(new Map()),
         viewMode: 'grid',
         comparePaths: reactive([]),
         thumbSize: 140,
@@ -516,15 +517,43 @@
       function isNew(f) {
         return state.hasIndexedOnce && f.addedAt && (state.now - f.addedAt) < 3000;
       }
+
+      // ---------- per-root snapshot cache (instant repaint on tab switch) ----------
+      // Kept outside `state` deliberately, so activateTab()'s clear doesn't
+      // wipe it — a lightweight {path,size,mtimeMs} listing per watched root,
+      // used to paint the grid immediately from memory instead of waiting on
+      // a fresh chokidar scan every time a tab is revisited. Persisted for
+      // the active tab via saveSession/restoreSession below.
+      const tabSnapshots = new Map(); // rootDir -> [{path, size, mtimeMs}]
+      function snapshotCurrentTab(tab = activeTab.value) {
+        if (!tab || !tab.rootDir || state.files.size === 0) return;
+        tabSnapshots.set(tab.rootDir, Array.from(state.files.values(), (f) => ({ path: f.path, size: f.size, mtimeMs: f.mtimeMs })));
+      }
+      // While a scan seeded from a snapshot is in flight: seededPaths is
+      // every path the snapshot claimed existed, confirmedPaths is the
+      // subset chokidar has actually re-confirmed so far. On 'ready',
+      // anything seeded-but-unconfirmed is gone from disk and gets dropped.
+      let seededPaths = null;
+      let confirmedPaths = null;
+
       function applyFsEvent(evt) {
         if (evt.type === 'added') {
           if (!isImagePath(evt.filePath)) return;
+          const already = state.files.get(evt.filePath);
+          if (seededPaths && seededPaths.has(evt.filePath)) {
+            confirmedPaths.add(evt.filePath);
+            if (already) {
+              already.size = evt.size;
+              already.mtimeMs = evt.mtimeMs;
+              return; // just a background re-confirmation of a snapshot-seeded tile
+            }
+          }
           if (!state.hasIndexedOnce && !state.indexing.active) { state.indexing.active = true; state.indexing.seen = 0; }
           state.indexing.seen += 1;
           state.files.set(evt.filePath, {
             path: evt.filePath, name: basename(evt.filePath), dir: dirname(evt.filePath),
             tags: [], lost: false, lostAt: null, addedAt: Date.now(),
-            info: null, dims: null,
+            info: null, dims: null, size: evt.size, mtimeMs: evt.mtimeMs,
           });
           state.receipt.line1 = 'fsevents · just now';
           state.receipt.line2 = '+1 added';
@@ -555,6 +584,14 @@
         } else if (evt.type === 'ready') {
           state.indexing.active = false;
           state.hasIndexedOnce = true;
+          if (seededPaths) {
+            for (const p of seededPaths) {
+              if (!confirmedPaths.has(p)) state.files.delete(p);
+            }
+            seededPaths = null;
+            confirmedPaths = null;
+          }
+          snapshotCurrentTab();
         } else if (evt.type === 'error') {
           state.permissionDenied.active = /EACCES|EPERM|permission/i.test(evt.message || evt.code || '');
           state.permissionDenied.path = activeTab.value.rootDir || '';
@@ -568,6 +605,8 @@
 
       async function beginWatch(rootDir) {
         eventQueue = [];
+        seededPaths = null;
+        confirmedPaths = null;
         state.files.clear();
         state.groups = [];
         state.expandedGroups.clear();
@@ -976,6 +1015,29 @@
         state.hasIndexedOnce = false;
         for (const t of state.tabs) t.watching = false;
         tab.watching = true;
+
+        // Paint from the last-known listing immediately instead of sitting on
+        // an empty grid until chokidar's rescan (kicked off below) completes
+        // — see snapshotCurrentTab/seededPaths above.
+        const snapshot = tabSnapshots.get(tab.rootDir);
+        if (snapshot && snapshot.length) {
+          seededPaths = new Set();
+          confirmedPaths = new Set();
+          for (const s of snapshot) {
+            seededPaths.add(s.path);
+            state.files.set(s.path, {
+              path: s.path, name: basename(s.path), dir: dirname(s.path),
+              tags: [], lost: false, lostAt: null, addedAt: 0,
+              info: null, dims: null, size: s.size, mtimeMs: s.mtimeMs,
+            });
+          }
+          state.indexing.active = false;
+          state.hasIndexedOnce = true;
+        } else {
+          seededPaths = null;
+          confirmedPaths = null;
+        }
+
         await window.retriever.watchFolder(tab.rootDir);
         selectFolder(tab.folderFilter || tab.rootDir);
       }
@@ -983,6 +1045,7 @@
         if (id === state.activeTabId) return;
         const tab = state.tabs.find((t) => t.id === id);
         if (!tab) return;
+        snapshotCurrentTab();
         state.activeTabId = id;
         if (tab.rootDir) await activateTab(tab);
         saveSession();
@@ -996,6 +1059,8 @@
       function closeTab(id) {
         if (state.tabs.length === 1) return;
         const i = state.tabs.findIndex((t) => t.id === id);
+        const closing = state.tabs[i];
+        if (closing.id === state.activeTabId) snapshotCurrentTab(closing);
         state.tabs.splice(i, 1);
         if (state.activeTabId === id) {
           const next = state.tabs[Math.max(0, i - 1)];
@@ -1008,11 +1073,17 @@
       // ---------- session persistence ----------
       // Remembers each tab's folder (and the exact subfolder within it) so
       // relaunching the app, or just switching tabs, doesn't require
-      // re-navigating to where you were.
+      // re-navigating to where you were. Also persists the active tab's
+      // snapshot (capped) so a cold relaunch can paint instantly too, via
+      // the same seeding path activateTab() uses for a live tab switch.
+      const SNAPSHOT_PERSIST_CAP = 5000;
       function saveSession() {
+        snapshotCurrentTab();
+        const activeRoot = activeTab.value && activeTab.value.rootDir;
         window.retriever.saveSession({
           tabs: state.tabs.map((t) => ({ rootDir: t.rootDir, label: t.label, folderFilter: t.folderFilter })),
           activeIndex: Math.max(0, state.tabs.findIndex((t) => t.id === state.activeTabId)),
+          snapshot: activeRoot ? (tabSnapshots.get(activeRoot) || []).slice(0, SNAPSHOT_PERSIST_CAP) : [],
         });
       }
       async function restoreSession() {
@@ -1024,6 +1095,9 @@
         }));
         const active = state.tabs[session.activeIndex] || state.tabs[0];
         state.activeTabId = active.id;
+        if (active.rootDir && Array.isArray(session.snapshot) && session.snapshot.length) {
+          tabSnapshots.set(active.rootDir, session.snapshot);
+        }
         if (active.rootDir) await activateTab(active);
       }
 
@@ -1099,6 +1173,26 @@
         const cached = state.imagePreviews.get(p);
         if (cached) return cached;
         if (cached === undefined) loadImagePreview(p);
+        return '';
+      }
+
+      // Small, disk-cached, downscaled thumbnail for grid tiles specifically
+      // (see get-thumbnail in main/index.js) — unlike previewSrc above, this
+      // never hands the grid a full-resolution file:// URL, TIFF or not.
+      function loadGridThumb(p) {
+        if (state.gridThumbs.has(p)) return;
+        state.gridThumbs.set(p, null); // in-flight marker
+        window.retriever.getThumbnail(p).then((thumbPath) => {
+          state.gridThumbs.set(p, thumbPath ? fileUrl(thumbPath) : '');
+        }).catch(() => {
+          state.gridThumbs.set(p, '');
+        });
+      }
+      function gridThumbSrc(p) {
+        if (!p) return '';
+        const cached = state.gridThumbs.get(p);
+        if (cached) return cached;
+        if (cached === undefined) loadGridThumb(p);
         return '';
       }
 
@@ -1244,7 +1338,7 @@
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
         openFileContextMenu, handleContextAction,
         openViewer, backToGrid, stepViewer, ensureFileInfo,
-        selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders, previewSrc,
+        selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders, previewSrc, gridThumbSrc,
         undo, onSliderPointerDown, toast, onImageLoad,
       };
     },
@@ -1443,7 +1537,7 @@
                        @click="onTileClick($event, entry.file.path)" @dblclick="openViewer(entry.file.path)"
                        @contextmenu="openFileContextMenu($event, entry.file.path)">
                     <div class="tile-thumb">
-                      <img loading="lazy" :src="previewSrc(entry.file.path)" :style="{ transform: 'rotate(' + (state.rotations[entry.file.path] || 0) + 'deg)' }" />
+                      <img loading="lazy" :src="gridThumbSrc(entry.file.path)" :style="{ transform: 'rotate(' + (state.rotations[entry.file.path] || 0) + 'deg)' }" />
                     </div>
                     <div v-if="state.inlineRenamePath === entry.file.path" class="tile-rename" @click.stop>
                       <input v-model="state.inlineRenameValue" @keydown.enter="commitInlineRename" @keydown.esc="cancelInlineRename" @blur="commitInlineRename" autofocus />
@@ -1459,7 +1553,7 @@
                     <div class="tile-stack">
                       <div class="layer layer1"></div>
                       <div class="layer layer2"></div>
-                      <div class="front"><img v-if="entry.cover" :src="previewSrc(entry.cover.path)" /></div>
+                      <div class="front"><img v-if="entry.cover" :src="gridThumbSrc(entry.cover.path)" /></div>
                       <div class="stack-pill" @click.stop="toggleExpand(entry.group.id)">▸ {{ entry.group.memberPaths.length }}</div>
                     </div>
                     <div class="tile-group-name">{{ entry.group.name }} ⌗</div>
@@ -1484,7 +1578,7 @@
                     <template v-for="p in g.memberPaths" :key="p">
                       <div v-if="state.files.get(p)" class="tile"
                            :class="{ selected: state.selection.includes(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
-                        <div class="tile-thumb"><img :src="previewSrc(p)" /></div>
+                        <div class="tile-thumb"><img :src="gridThumbSrc(p)" /></div>
                         <div class="tile-name"><span class="fname">{{ state.files.get(p).name }}</span></div>
                       </div>
                     </template>

@@ -11,6 +11,7 @@ const { execFile, execFileSync } = require('child_process');
 const db = require('./db');
 const { createWatcher, ensureTracked } = require('./watcher');
 const { stripBuffer } = require('./metadata');
+const thumbnails = require('./thumbnails');
 
 // We're a local file-browsing app, not a web app — no need for Chromium's
 // HTTP disk cache to grow unbounded on disk.
@@ -113,6 +114,7 @@ app.whenReady().then(() => {
   }
   database = db.openDb(app.getPath('userData'));
   sessionPath = path.join(app.getPath('userData'), 'session.json');
+  thumbnails.initThumbnailCache(app.getPath('userData'));
   createWindow();
 
   ipcMain.handle('choose-folder', async () => {
@@ -305,6 +307,11 @@ app.whenReady().then(() => {
   // See runSips above for why this is a sync spawn.
   ipcMain.handle('get-image-preview', (_event, filePath) => runSips(filePath));
 
+  // Small, downscaled, disk-cached thumbnail for grid tiles — see
+  // thumbnails.js. Distinct from get-image-preview above, which produces a
+  // much larger (2000px) fit-to-width preview for the full viewer/TIFFs.
+  ipcMain.handle('get-thumbnail', (_event, filePath) => thumbnails.getThumbnailPath(filePath));
+
   // Remembers open tabs (root folder + current subfolder) across relaunches
   // and, since only one folder is ever actually watched at a time (see
   // startWatching), is also what a live tab switch reads back from to
@@ -327,5 +334,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (watcher) watcher.close();
+  thumbnails.shutdownThumbnailWorkers();
   if (process.platform !== 'darwin') app.quit();
 });

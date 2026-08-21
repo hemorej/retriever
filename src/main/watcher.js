@@ -59,7 +59,7 @@ function createWatcher({ rootDir, database, onEvent }) {
       }
     }
 
-    onEvent({ type: 'added', filePath, tracked: false });
+    onEvent({ type: 'added', filePath, size, mtimeMs, tracked: false });
   }
 
   function handleUnlink(filePath) {
