@@ -205,14 +205,46 @@
     props: { files: Array, folderLabel: String },
     emits: ['close', 'rename'],
     data() {
-      return { literal: 'renamed', startAt: 1, separator: '_', caseMode: 'lower' };
+      return {
+        literal: 'renamed', startAt: 1, separator: '_', caseMode: 'lower',
+        useCounter: true, useCaptureDate: false, useDimensions: false, useOriginalName: false, useFolder: false,
+      };
+    },
+    mounted() {
+      // Capture date and dimensions are lazily fetched (same as the info strip /
+      // viewer do) so the preview table can show real values, not placeholders.
+      for (const f of this.files) {
+        if (!f.info) window.retriever.getFileInfo(f.path).then((info) => { if (info) f.info = info; });
+        if (!f.dims) {
+          const img = new Image();
+          img.onload = () => { f.dims = { w: img.naturalWidth, h: img.naturalHeight }; };
+          img.src = fileUrl(f.path);
+        }
+      }
+    },
+    methods: {
+      captureDateStr(f) {
+        if (!f.info || !f.info.mtimeMs) return '….-..-..';
+        const d = new Date(f.info.mtimeMs);
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      },
+      dimensionsStr(f) { return f.dims ? `${f.dims.w}x${f.dims.h}` : '…x…'; },
+      folderName(f) { const parts = f.path.split('/'); return parts[parts.length - 2] || ''; },
+      focusLiteral() { this.$refs.literalInput?.focus(); },
     },
     computed: {
       previews() {
         return this.files.map((f, i) => {
           const ext = extname(f.path) ? '.' + extname(f.path) : '';
-          const counter = String(this.startAt + i).padStart(3, '0');
-          let base = `${this.literal}${this.separator}${counter}`;
+          const parts = [];
+          if (this.literal) parts.push(this.literal);
+          if (this.useCaptureDate) parts.push(this.captureDateStr(f));
+          if (this.useDimensions) parts.push(this.dimensionsStr(f));
+          if (this.useOriginalName) parts.push(stripExt(f.name));
+          if (this.useFolder) parts.push(this.folderName(f));
+          if (this.useCounter) parts.push(String(this.startAt + i).padStart(3, '0'));
+          let base = parts.join(this.separator) || stripExt(f.name);
           if (this.caseMode === 'lower') base = base.toLowerCase();
           if (this.caseMode === 'upper') base = base.toUpperCase();
           return { old: f.name, next: base + ext, file: f };
@@ -231,16 +263,21 @@
             <div style="display:flex;flex-direction:column;gap:7px">
               <div class="fp-section-label">Pattern</div>
               <div class="pattern-field">
-                <input v-model="literal" style="background:transparent;border:none;outline:none;color:#f0cf72;font:11.5px 'Geist Mono',ui-monospace,monospace;width:120px" />
-                <span class="dot">·</span>
-                <span class="pattern-token">{capture:yyyy-mm-dd}</span>
-                <span class="dot">·</span>
-                <span class="pattern-token">{counter:{{ String(startAt).padStart(3,'0') }}}</span>
+                <input ref="literalInput" v-model="literal" style="background:transparent;border:none;outline:none;color:#f0cf72;font:11.5px 'Geist Mono',ui-monospace,monospace;width:120px" />
+                <template v-if="useCaptureDate"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useCaptureDate = false">{capture:yyyy-mm-dd}</span></template>
+                <template v-if="useDimensions"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useDimensions = false">{dimensions}</span></template>
+                <template v-if="useOriginalName"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useOriginalName = false">{original name}</span></template>
+                <template v-if="useFolder"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useFolder = false">{folder}</span></template>
+                <template v-if="useCounter"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useCounter = false">{counter:{{ String(startAt).padStart(3,'0') }}}</span></template>
                 <span class="caret"></span>
               </div>
               <div class="token-palette">
-                <span class="token-pill">+ text</span><span class="token-pill">+ counter</span><span class="token-pill">+ capture date</span>
-                <span class="token-pill">+ original name</span><span class="token-pill">+ folder</span><span class="token-pill">+ dimensions</span>
+                <span class="token-pill" @click="focusLiteral">+ text</span>
+                <span class="token-pill" :class="{ active: useCounter }" @click="useCounter = !useCounter">+ counter</span>
+                <span class="token-pill" :class="{ active: useCaptureDate }" @click="useCaptureDate = !useCaptureDate">+ capture date</span>
+                <span class="token-pill" :class="{ active: useOriginalName }" @click="useOriginalName = !useOriginalName">+ original name</span>
+                <span class="token-pill" :class="{ active: useFolder }" @click="useFolder = !useFolder">+ folder</span>
+                <span class="token-pill" :class="{ active: useDimensions }" @click="useDimensions = !useDimensions">+ dimensions</span>
               </div>
             </div>
             <div class="opts-row">
@@ -309,7 +346,7 @@
             <span class="note">Writes to the files on disk.</span>
             <div class="actions">
               <div class="btn ghost" @click="$emit('close')">Cancel</div>
-              <div class="btn danger" @click="$emit('strip')">Strip {{ files.length }} files</div>
+              <div class="btn danger" @click="$emit('strip', { exif, gps, iptc, thumbs, icc, keepCopy })">Strip {{ files.length }} files</div>
             </div>
           </div>
         </div>
@@ -757,6 +794,35 @@
           try { await window.retriever.duplicateFile(p); } catch (e) { toast(e.message); }
         }
       }
+      async function openInExternalEditor(p) {
+        if (!p) return;
+        try { await window.retriever.openInExternalEditor(p); } catch (e) { toast(e.message); }
+      }
+      async function stripMetadataForSelection(options) {
+        const paths = [...state.selection]; // plain array — see moveOrCopySelection for why
+        state.cleanupDialogOpen = false;
+        if (!paths.length) return;
+        try {
+          const results = await window.retriever.stripMetadata(paths, options);
+          const skipped = results.filter((r) => r.skipped).length;
+          const done = results.length - skipped;
+          let msg = `Stripped metadata from ${done} file${done === 1 ? '' : 's'}`;
+          if (skipped) msg += ` · ${skipped} unsupported format${skipped === 1 ? '' : 's'} skipped`;
+          toast(msg);
+        } catch (e) { toast(e.message); }
+      }
+      async function moveOrCopySelection(mode) {
+        // Spread to a plain array — state.selection is a Vue reactive Proxy,
+        // and Electron's IPC structured-clone can't serialize that directly.
+        const paths = [...(state.selection.length ? state.selection : (state.contextMenu.targetPath ? [state.contextMenu.targetPath] : []))];
+        if (!paths.length) return;
+        const destDir = await window.retriever.chooseDestinationFolder();
+        if (!destDir) return;
+        try {
+          const result = mode === 'move' ? await window.retriever.moveFiles(paths, destDir) : await window.retriever.copyFiles(paths, destDir);
+          toast(`${mode === 'move' ? 'Moved' : 'Copied'} ${result.length} file${result.length === 1 ? '' : 's'} to ${destDir}`);
+        } catch (e) { toast(e.message); }
+      }
       function startInlineRename(p) {
         state.inlineRenamePath = p;
         state.inlineRenameValue = stripExt(p);
@@ -792,11 +858,11 @@
         const p = state.contextMenu.targetPath;
         state.contextMenu.open = false;
         switch (action) {
-          case 'open-photoshop': toast('No external editor configured — set one in Preferences.'); break;
+          case 'open-photoshop': openInExternalEditor(p); break;
           case 'rename': startInlineRename(p); break;
           case 'duplicate': duplicateFiles(state.selection.length ? state.selection : [p]); break;
-          case 'move': toast('Move to… isn’t wired up in this pass.'); break;
-          case 'copy': toast('Copy to… isn’t wired up in this pass.'); break;
+          case 'move': moveOrCopySelection('move'); break;
+          case 'copy': moveOrCopySelection('copy'); break;
           case 'tag': state.tagMenu.open = true; state.tagMenu.x = state.contextMenu.x + 10; state.tagMenu.y = state.contextMenu.y + 10; break;
           case 'group': groupSelection(); break;
           case 'rotate': rotateSelection(90); break;
@@ -927,7 +993,8 @@
         if (e.metaKey && e.key.toLowerCase() === 'r') { e.preventDefault(); if (activePath.value) startInlineRename(activePath.value); return; }
         if (e.metaKey && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateFiles(state.selection); return; }
         if (e.metaKey && e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); toast('Parent folder navigation isn’t available — choose a folder to change roots.'); return; }
-        if (e.metaKey && e.altKey && (e.key.toLowerCase() === 'm' || e.key.toLowerCase() === 'c')) { e.preventDefault(); toast('Not wired up in this pass.'); return; }
+        if (e.metaKey && e.altKey && e.key.toLowerCase() === 'm') { e.preventDefault(); moveOrCopySelection('move'); return; }
+        if (e.metaKey && e.altKey && e.key.toLowerCase() === 'c') { e.preventDefault(); moveOrCopySelection('copy'); return; }
         if (e.metaKey && e.key === 'Backspace') { e.preventDefault(); if (state.selection.length) state.cleanupDialogOpen = true; return; }
         if (e.metaKey && e.key.toLowerCase() === 'o' && e.shiftKey) { e.preventDefault(); if (activePath.value) revealInFinder(activePath.value); return; }
         if (e.metaKey && e.key === 'z') { e.preventDefault(); undo(); return; }
@@ -957,13 +1024,16 @@
         window.addEventListener('keyup', onKeyup);
         window.addEventListener('click', () => { state.contextMenu.open = false; state.tagMenu.open = false; });
 
-        if (gridAreaEl.value) {
-          gridViewportHeight.value = gridAreaEl.value.clientHeight;
-          gridResizeObserver = new ResizeObserver(() => {
-            gridViewportHeight.value = gridAreaEl.value.clientHeight;
-          });
-          gridResizeObserver.observe(gridAreaEl.value);
-        }
+        // .grid-area only exists in the DOM while state.viewMode === 'grid' —
+        // its template ref goes null across a grid<->viewer switch, so the
+        // observer has to be re-attached (not just created once at mount).
+        gridResizeObserver = new ResizeObserver(() => {
+          if (gridAreaEl.value) gridViewportHeight.value = gridAreaEl.value.clientHeight;
+        });
+        watch(gridAreaEl, (el, prevEl) => {
+          if (prevEl) gridResizeObserver.unobserve(prevEl);
+          if (el) { gridViewportHeight.value = el.clientHeight; gridResizeObserver.observe(el); }
+        }, { immediate: true });
         watch(() => [state.thumbSize, renderedEntries.value.length], () => nextTick(measureTileRowExtra), { immediate: true });
       });
       onUnmounted(() => {
@@ -997,6 +1067,7 @@
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
         rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup,
         duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, revealInFinder,
+        moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
         openFileContextMenu, handleContextAction,
         openViewer, backToGrid, stepViewer, ensureFileInfo,
         selectTab, addTab, closeTab, folderTree, selectFolder,
@@ -1288,7 +1359,7 @@
           <div class="chip">100%</div>
           <div class="chip"><span @click="rotateSelection(-90)">↺</span> Rotate <span @click="rotateSelection(90)">↻</span></div>
           <div class="chip" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 300; state.tagMenu.y = 60">Tag ▾</div>
-          <div class="chip" @click="toast('No external editor configured — set one in Preferences.')">Open in Photoshop</div>
+          <div class="chip" @click="openInExternalEditor(activePath)">Open in Photoshop</div>
           <div class="spacer"></div>
           <span style="font-family:'Geist Mono',ui-monospace,monospace;color:#8f8c89">{{ navOrder.indexOf(activePath) + 1 }} / {{ navOrder.length }}</span>
           <div style="display:flex;gap:2px">
@@ -1371,7 +1442,7 @@
       <cleanup-dialog v-if="state.cleanupDialogOpen" :files="state.selection.map(p => state.files.get(p)).filter(Boolean)"
                       :group-label="activeGroupId ? ('group “' + groupById.get(activeGroupId).name + '” · ' + state.selection.length + ' files') : (state.selection.length + ' files')"
                       @close="state.cleanupDialogOpen = false"
-                      @strip="toast('Metadata stripping isn’t wired up in this pass.'); state.cleanupDialogOpen = false"></cleanup-dialog>
+                      @strip="stripMetadataForSelection"></cleanup-dialog>
 
       <shortcuts-sheet v-if="state.shortcutsHeld"></shortcuts-sheet>
 

@@ -9,6 +9,7 @@ const fs = require('fs');
 const os = require('os');
 const db = require('./db');
 const { createWatcher, ensureTracked } = require('./watcher');
+const { stripBuffer } = require('./metadata');
 
 // We're a local file-browsing app, not a web app — no need for Chromium's
 // HTTP disk cache to grow unbounded on disk.
@@ -18,6 +19,21 @@ let mainWindow;
 let database;
 let watcher;
 let watchedRoot;
+
+// Same "-2, -3, …" collision scheme as duplicate-file, generalized to an
+// arbitrary destination directory (move/copy land files there, possibly
+// alongside a file of the same name that's unrelated to the one being moved).
+function uniqueDestPath(destDir, filePath) {
+  const ext = path.extname(filePath);
+  const base = path.basename(filePath, ext);
+  let candidate = path.join(destDir, path.basename(filePath));
+  let n = 2;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(destDir, `${base}-${n}${ext}`);
+    n += 1;
+  }
+  return candidate;
+}
 
 const iconPath = path.join(__dirname, '../renderer/icon.png');
 
@@ -146,6 +162,74 @@ app.whenReady().then(() => {
     }
     await fs.promises.rename(filePath, newPath);
     return newPath;
+  });
+
+  ipcMain.handle('choose-destination-folder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
+  // Moves that land back in the currently watched root are picked up by the
+  // watcher as an unlink/add pair and re-identified by content hash (see
+  // watcher.js) — this handler just performs the fs operation.
+  ipcMain.handle('move-files', async (_event, { filePaths, destDir }) => {
+    const moved = [];
+    for (const filePath of filePaths) {
+      if (path.dirname(filePath) === destDir) continue; // already there
+      const dest = uniqueDestPath(destDir, filePath);
+      try {
+        await fs.promises.rename(filePath, dest);
+      } catch (err) {
+        if (err.code !== 'EXDEV') throw err; // cross-device: rename() can't do it, fall back to copy+delete
+        await fs.promises.copyFile(filePath, dest);
+        await fs.promises.unlink(filePath);
+      }
+      moved.push(dest);
+    }
+    return moved;
+  });
+
+  ipcMain.handle('copy-files', async (_event, { filePaths, destDir }) => {
+    const copied = [];
+    for (const filePath of filePaths) {
+      const dest = uniqueDestPath(destDir, filePath);
+      await fs.promises.copyFile(filePath, dest);
+      copied.push(dest);
+    }
+    return copied;
+  });
+
+  ipcMain.handle('strip-metadata', async (_event, { filePaths, options }) => {
+    const results = [];
+    for (const filePath of filePaths) {
+      const ext = path.extname(filePath);
+      const buf = await fs.promises.readFile(filePath);
+      const stripped = stripBuffer(buf, ext, options);
+      if (stripped === null) {
+        results.push({ filePath, skipped: true });
+        continue;
+      }
+      if (options.keepCopy) {
+        const originalsDir = path.join(path.dirname(filePath), '_originals');
+        await fs.promises.mkdir(originalsDir, { recursive: true });
+        const backupPath = path.join(originalsDir, path.basename(filePath));
+        if (!fs.existsSync(backupPath)) await fs.promises.copyFile(filePath, backupPath);
+      }
+      await fs.promises.writeFile(filePath, stripped);
+      results.push({ filePath, skipped: false });
+    }
+    return results;
+  });
+
+  // Opens the file in the OS-default handler for it — the "external editor"
+  // is whatever app the user's system already has associated with the file
+  // type. There's no in-app preferences store yet to pin a specific app.
+  ipcMain.handle('open-in-external-editor', async (_event, filePath) => {
+    const err = await shell.openPath(filePath);
+    if (err) throw new Error(err);
   });
 });
 

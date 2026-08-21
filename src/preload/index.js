@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('retriever', {
   openFolder: (filePath) => ipcRenderer.invoke('open-folder', filePath),
   renameFile: (filePath, newName) => ipcRenderer.invoke('rename-file', { filePath, newName }),
   duplicateFile: (filePath) => ipcRenderer.invoke('duplicate-file', filePath),
+  chooseDestinationFolder: () => ipcRenderer.invoke('choose-destination-folder'),
+  moveFiles: (filePaths, destDir) => ipcRenderer.invoke('move-files', { filePaths, destDir }),
+  copyFiles: (filePaths, destDir) => ipcRenderer.invoke('copy-files', { filePaths, destDir }),
+  stripMetadata: (filePaths, options) => ipcRenderer.invoke('strip-metadata', { filePaths, options }),
+  openInExternalEditor: (filePath) => ipcRenderer.invoke('open-in-external-editor', filePath),
   onFsEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('fs-event', listener);
