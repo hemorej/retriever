@@ -24,9 +24,43 @@ let mainWindow;
 let database;
 let watcher;
 let watchedRoot;
+let sessionPath;
 
 const EXTERNAL_EDITOR_APP = '/Applications/Affinity Photo 2.app';
 const PREVIEW_MAX_DIMENSION = 2000;
+const SIPS_CONCURRENCY = 2;
+
+// Serializes `sips` invocations (see get-image-preview below) to a small
+// fixed concurrency instead of letting every requested TIFF spawn at once.
+let sipsRunning = 0;
+const sipsQueue = [];
+function runSipsQueued(filePath) {
+  return new Promise((resolve, reject) => {
+    sipsQueue.push({ filePath, resolve, reject });
+    pumpSipsQueue();
+  });
+}
+function pumpSipsQueue() {
+  if (sipsRunning >= SIPS_CONCURRENCY || sipsQueue.length === 0) return;
+  const { filePath, resolve, reject } = sipsQueue.shift();
+  sipsRunning++;
+  runSips(filePath).then(resolve, reject).finally(() => {
+    sipsRunning--;
+    pumpSipsQueue();
+  });
+}
+async function runSips(filePath) {
+  const tmpPath = path.join(os.tmpdir(), `retriever-preview-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
+  try {
+    await new Promise((resolve, reject) => {
+      execFile('sips', ['-s', 'format', 'png', '-Z', String(PREVIEW_MAX_DIMENSION), filePath, '--out', tmpPath], (err) => (err ? reject(err) : resolve()));
+    });
+    const buf = await fs.promises.readFile(tmpPath);
+    return `data:image/png;base64,${buf.toString('base64')}`;
+  } finally {
+    fs.promises.unlink(tmpPath).catch(() => {});
+  }
+}
 
 // Same "-2, -3, …" collision scheme as duplicate-file, generalized to an
 // arbitrary destination directory (move/copy land files there, possibly
@@ -93,6 +127,7 @@ app.whenReady().then(() => {
     app.dock.setIcon(dockIconPath);
   }
   database = db.openDb(app.getPath('userData'));
+  sessionPath = path.join(app.getPath('userData'), 'session.json');
   createWindow();
 
   ipcMain.handle('choose-folder', async () => {
@@ -282,16 +317,30 @@ app.whenReady().then(() => {
   // preview. Shelling out to macOS's built-in `sips` converts (and, via
   // -Z, downsamples) to PNG in one call, with no new dependency. Everything
   // else still loads straight from disk via file:// (see fileUrl in app.js).
-  ipcMain.handle('get-image-preview', async (_event, filePath) => {
-    const tmpPath = path.join(os.tmpdir(), `retriever-preview-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
+  //
+  // The grid can request dozens of these at once (every visible TIFF tile
+  // fires one on mount) — spawning that many `sips` children concurrently
+  // hits a real Electron/libuv race on macOS (spawn EBADF, seen in
+  // practice), so calls are serialized through a small queue instead of
+  // firing execFile directly.
+  ipcMain.handle('get-image-preview', (_event, filePath) => runSipsQueued(filePath));
+
+  // Remembers open tabs (root folder + current subfolder) across relaunches
+  // and, since only one folder is ever actually watched at a time (see
+  // startWatching), is also what a live tab switch reads back from to
+  // restore where that tab was browsing.
+  ipcMain.handle('load-session', async () => {
     try {
-      await new Promise((resolve, reject) => {
-        execFile('sips', ['-s', 'format', 'png', '-Z', String(PREVIEW_MAX_DIMENSION), filePath, '--out', tmpPath], (err) => (err ? reject(err) : resolve()));
-      });
-      const buf = await fs.promises.readFile(tmpPath);
-      return `data:image/png;base64,${buf.toString('base64')}`;
-    } finally {
-      fs.promises.unlink(tmpPath).catch(() => {});
+      return JSON.parse(await fs.promises.readFile(sessionPath, 'utf8'));
+    } catch {
+      return null;
+    }
+  });
+  ipcMain.handle('save-session', async (_event, session) => {
+    try {
+      await fs.promises.writeFile(sessionPath, JSON.stringify(session));
+    } catch {
+      // Non-critical — worst case is losing tab restore on next launch.
     }
   });
 });

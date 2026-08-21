@@ -938,20 +938,81 @@
       }
 
       // ---------- tabs ----------
-      function selectTab(id) { state.activeTabId = id; }
+      // Only one folder can actually be watched at a time (see startWatching
+      // in main/index.js — a single chokidar instance, not one per root), so
+      // switching tabs re-points that single watcher at the target tab's
+      // rootDir rather than keeping N watchers live. This is also what
+      // makes a tab's location survive a switch: previously nothing
+      // re-attached the watcher, so an inactive tab just showed an empty,
+      // non-watching grid until re-navigated.
+      async function activateTab(tab) {
+        eventQueue = [];
+        state.files.clear();
+        state.groups = [];
+        state.expandedGroups.clear();
+        state.selection = [];
+        state.expandedFolders.clear();
+        state.subfoldersCache.clear();
+        state.viewMode = 'grid';
+        state.permissionDenied.active = false;
+        state.indexing.active = true;
+        state.indexing.seen = 0;
+        state.hasIndexedOnce = false;
+        for (const t of state.tabs) t.watching = false;
+        tab.watching = true;
+        await window.retriever.watchFolder(tab.rootDir);
+        selectFolder(tab.folderFilter || tab.rootDir);
+      }
+      async function selectTab(id) {
+        if (id === state.activeTabId) return;
+        const tab = state.tabs.find((t) => t.id === id);
+        if (!tab) return;
+        state.activeTabId = id;
+        if (tab.rootDir) await activateTab(tab);
+        saveSession();
+      }
       function addTab() {
-        const t = { id: uid('tab'), rootDir: null, watching: false, label: 'Untitled' };
+        const t = { id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', folderFilter: null };
         state.tabs.push(t);
         state.activeTabId = t.id;
+        saveSession();
       }
       function closeTab(id) {
         if (state.tabs.length === 1) return;
         const i = state.tabs.findIndex((t) => t.id === id);
         state.tabs.splice(i, 1);
-        if (state.activeTabId === id) state.activeTabId = state.tabs[Math.max(0, i - 1)].id;
+        if (state.activeTabId === id) {
+          const next = state.tabs[Math.max(0, i - 1)];
+          state.activeTabId = next.id;
+          if (next.rootDir) activateTab(next);
+        }
+        saveSession();
+      }
+
+      // ---------- session persistence ----------
+      // Remembers each tab's folder (and the exact subfolder within it) so
+      // relaunching the app, or just switching tabs, doesn't require
+      // re-navigating to where you were.
+      function saveSession() {
+        window.retriever.saveSession({
+          tabs: state.tabs.map((t) => ({ rootDir: t.rootDir, label: t.label, folderFilter: t.folderFilter })),
+          activeIndex: Math.max(0, state.tabs.findIndex((t) => t.id === state.activeTabId)),
+        });
+      }
+      async function restoreSession() {
+        const session = await window.retriever.loadSession();
+        if (!session || !Array.isArray(session.tabs) || session.tabs.length === 0) return;
+        state.tabs = session.tabs.map((t) => ({
+          id: uid('tab'), rootDir: t.rootDir || null, watching: false,
+          label: t.label || 'Untitled', folderFilter: t.folderFilter || t.rootDir || null,
+        }));
+        const active = state.tabs[session.activeIndex] || state.tabs[0];
+        state.activeTabId = active.id;
+        if (active.rootDir) await activateTab(active);
       }
 
       state.activeTabId = state.tabs[0].id;
+      restoreSession();
 
       // ---------- folder tree ----------
       const folderTree = computed(() => {
@@ -988,6 +1049,8 @@
       }
       function selectFolder(p) {
         state.folderFilter = p;
+        if (activeTab.value) activeTab.value.folderFilter = p;
+        saveSession();
         loadSubfolders(p);
         // Auto-expand the selected folder and all of its ancestors so the
         // tree reveals its subdirs immediately.
