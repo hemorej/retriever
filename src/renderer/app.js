@@ -387,7 +387,7 @@
           { label: 'Navigate', rows: [
             ['↑ ↓ ← →', 'move selection'], ['↵', 'open fit-width'], ['esc', 'back to grid'],
             ['⌘T', 'new tab'], ['⌘1–9', 'go to tab'], ['⌘⌥←', 'parent folder'],
-            ['⌘F', 'search filenames'], ['⌘L', 'filter panel'],
+            ['⌘F', 'search filenames'], ['⌘L', 'filter panel'], ['P', 'compare selected images (2–6)'],
           ]},
           { label: 'Select & group', rows: [
             ['⌘A', 'select all'], ['⇧click', 'extend'], ['⌘click', 'add / remove'],
@@ -447,6 +447,7 @@
         subfoldersCache: reactive(new Map()),
         imagePreviews: reactive(new Map()),
         viewMode: 'grid',
+        comparePaths: reactive([]),
         thumbSize: 140,
         search: '',
         sortMode: 'date',
@@ -916,15 +917,30 @@
       }
 
       // ---------- viewer ----------
-      function openViewer(p) { selectSingle(p); state.viewMode = 'viewer'; }
-      function backToGrid() { state.viewMode = 'grid'; }
+      function openViewer(p) { selectSingle(p); state.viewMode = 'viewer'; state.comparePaths.length = 0; }
+      function backToGrid() { state.viewMode = 'grid'; state.comparePaths.length = 0; }
       function stepViewer(delta) {
         const order = navOrder.value;
         const i = order.indexOf(activePath.value);
         if (i === -1) return;
         const next = order[(i + delta + order.length) % order.length];
-        if (next) selectSingle(next);
+        if (next) { selectSingle(next); state.comparePaths.length = 0; }
       }
+      const compareMode = computed(() => state.viewMode === 'viewer' && state.comparePaths.length > 1);
+      const comparableSelectionCount = computed(() => state.selection.filter(isImagePath).length);
+      const compareGridDims = computed(() => {
+        const n = state.comparePaths.length;
+        if (n <= 3) return { cols: n, rows: 1 };
+        return { cols: Math.ceil(n / 2), rows: 2 };
+      });
+      function openCompareView() {
+        const paths = state.selection.filter(isImagePath);
+        if (paths.length < 2) { toast('Select 2–6 image files to compare.'); return; }
+        if (paths.length > 6) toast('Compare shows up to 6 images at once — showing the first 6.');
+        state.comparePaths = paths.slice(0, 6);
+        state.viewMode = 'viewer';
+      }
+      function exitCompareToSingle(p) { state.comparePaths.length = 0; selectSingle(p); }
 
       // ---------- file info (lazy) ----------
       async function ensureFileInfo(f) {
@@ -1119,10 +1135,12 @@
           else if (state.renameDialogOpen) state.renameDialogOpen = false;
           else if (state.cleanupDialogOpen) state.cleanupDialogOpen = false;
           else if (state.filterPanelOpen) state.filterPanelOpen = false;
+          else if (state.comparePaths.length) state.comparePaths.length = 0;
           else if (state.viewMode === 'viewer') backToGrid();
           return;
         }
         if (e.key === 'Enter' && activePath.value && state.viewMode === 'grid') { openViewer(activePath.value); return; }
+        if (!e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); openCompareView(); return; }
 
         const order = navOrder.value;
         if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
@@ -1217,6 +1235,7 @@
         chooseFolder, useDefaultFolder, beginWatch,
         groupMembership, groupById, allFiles, tagCounts, typeCounts, visibleFiles, sortedFiles,
         gridEntries, renderedEntries, expandedGroupList, navOrder, activePath, activeFile, activeGroupId, systemState, isNew,
+        compareMode, compareGridDims, comparableSelectionCount, openCompareView, exitCompareToSingle,
         gridAreaEl, onGridScroll, tileGridPosition, gridRowHeight, gridTotalRows,
         onTileClick, selectSingle, selectAll,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
@@ -1265,6 +1284,7 @@
           <div class="chip-row">
             <div class="chip"><span @click="rotateSelection(-90)">↺</span><span>Rotate</span><span @click="rotateSelection(90)">↻</span></div>
             <div class="chip" :class="{ accent: state.selection.length >= 2 }" @click="groupSelection">Group {{ state.selection.length }}</div>
+            <div class="chip" :class="{ disabled: comparableSelectionCount < 2, accent: comparableSelectionCount >= 2 }" @click="openCompareView">Compare <span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">P</span></div>
             <div class="chip" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 190; state.tagMenu.y = 74">Tag ▾</div>
             <div class="chip" :class="{ disabled: state.selection.length !== 1 }" @click="startInlineRename(activePath)">Rename…</div>
             <div class="chip" :class="{ disabled: !state.selection.length }" @click="state.cleanupDialogOpen = true">Clean metadata</div>
@@ -1527,18 +1547,25 @@
         <div class="toolbar">
           <div class="chip" @click="backToGrid">← Back to grid <span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">esc</span></div>
           <div class="vdivider"></div>
-          <div class="chip accent">Fit width</div>
-          <div class="chip">Fit screen</div>
-          <div class="chip">100%</div>
-          <div class="chip"><span @click="rotateSelection(-90)">↺</span> Rotate <span @click="rotateSelection(90)">↻</span></div>
-          <div class="chip" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 300; state.tagMenu.y = 60">Tag ▾</div>
-          <div class="chip" @click="openInExternalEditor(activePath)">Open in Editor</div>
+          <template v-if="compareMode">
+            <div class="chip accent">Compare · {{ state.comparePaths.length }}-up</div>
+          </template>
+          <template v-else>
+            <div class="chip accent">Fit width</div>
+            <div class="chip">Fit screen</div>
+            <div class="chip">100%</div>
+            <div class="chip"><span @click="rotateSelection(-90)">↺</span> Rotate <span @click="rotateSelection(90)">↻</span></div>
+            <div class="chip" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 300; state.tagMenu.y = 60">Tag ▾</div>
+            <div class="chip" @click="openInExternalEditor(activePath)">Open in Editor</div>
+          </template>
           <div class="spacer"></div>
-          <span style="font-family:'Geist Mono',ui-monospace,monospace;color:#8f8c89">{{ navOrder.indexOf(activePath) + 1 }} / {{ navOrder.length }}</span>
-          <div style="display:flex;gap:2px">
-            <div class="chip" style="width:26px;justify-content:center;padding:0" @click="stepViewer(-1)">‹</div>
-            <div class="chip" style="width:26px;justify-content:center;padding:0" @click="stepViewer(1)">›</div>
-          </div>
+          <template v-if="!compareMode">
+            <span style="font-family:'Geist Mono',ui-monospace,monospace;color:#8f8c89">{{ navOrder.indexOf(activePath) + 1 }} / {{ navOrder.length }}</span>
+            <div style="display:flex;gap:2px">
+              <div class="chip" style="width:26px;justify-content:center;padding:0" @click="stepViewer(-1)">‹</div>
+              <div class="chip" style="width:26px;justify-content:center;padding:0" @click="stepViewer(1)">›</div>
+            </div>
+          </template>
         </div>
 
         <div class="body-split">
@@ -1570,6 +1597,20 @@
               </div>
             </div>
           </template>
+          <template v-else-if="compareMode">
+            <div class="viewer-body">
+              <div class="viewer-compare-grid" :style="{ gridTemplateColumns: 'repeat(' + compareGridDims.cols + ', 1fr)', gridTemplateRows: 'repeat(' + compareGridDims.rows + ', 1fr)' }">
+                <div class="viewer-compare-cell" v-for="p in state.comparePaths" :key="p" @click="exitCompareToSingle(p)" :title="p">
+                  <img :src="previewSrc(p)" :style="{ transform: 'rotate(' + (state.rotations[p] || 0) + 'deg)' }" />
+                </div>
+              </div>
+              <div class="filmstrip">
+                <div class="filmstrip-cell" v-for="p in navOrder" :key="p" :class="{ comparing: state.comparePaths.includes(p) }" @click="exitCompareToSingle(p)">
+                  <img v-if="state.files.get(p)" :src="previewSrc(p)" />
+                </div>
+              </div>
+            </div>
+          </template>
           <template v-else-if="activeFile">
             <div class="viewer-body">
               <div class="viewer-stage">
@@ -1586,7 +1627,13 @@
           <tag-menu v-if="state.tagMenu.open" :x="state.tagMenu.x" :y="state.tagMenu.y" @pick="pickFromTagMenu" @click.stop></tag-menu>
         </div>
 
-        <div class="info-strip" style="height:112px" v-if="activeFile && !activeFile.lost">
+        <div class="info-strip" style="height:112px" v-if="compareMode">
+          <div style="display:flex;flex-direction:column;gap:6px;min-width:250px">
+            <div class="info-name">Comparing {{ state.comparePaths.length }} images</div>
+            <div class="info-path">Click a tile to view it full-size · esc to exit compare</div>
+          </div>
+        </div>
+        <div class="info-strip" style="height:112px" v-else-if="activeFile && !activeFile.lost">
           <div style="display:flex;flex-direction:column;gap:6px;min-width:250px">
             <div class="info-name">{{ activeFile.name }}</div>
             <div class="info-path">{{ shortenPath(activeFile.dir) }}</div>
@@ -1602,7 +1649,8 @@
           </div>
         </div>
         <div class="statusbar">
-          <span>{{ navOrder.indexOf(activePath) + 1 }} of {{ navOrder.length }}</span>
+          <span v-if="compareMode">comparing {{ state.comparePaths.length }} images</span>
+          <span v-else>{{ navOrder.indexOf(activePath) + 1 }} of {{ navOrder.length }}</span>
           <span class="live"><span class="live-dot"></span>live</span>
           <span>⌘/ shortcuts</span>
         </div>

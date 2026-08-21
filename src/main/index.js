@@ -7,7 +7,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFile } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
 const db = require('./db');
 const { createWatcher, ensureTracked } = require('./watcher');
 const { stripBuffer } = require('./metadata');
@@ -28,34 +28,19 @@ let sessionPath;
 
 const EXTERNAL_EDITOR_APP = '/Applications/Affinity Photo 2.app';
 const PREVIEW_MAX_DIMENSION = 2000;
-const SIPS_CONCURRENCY = 2;
 
-// Serializes `sips` invocations (see get-image-preview below) to a small
-// fixed concurrency instead of letting every requested TIFF spawn at once.
-let sipsRunning = 0;
-const sipsQueue = [];
-function runSipsQueued(filePath) {
-  return new Promise((resolve, reject) => {
-    sipsQueue.push({ filePath, resolve, reject });
-    pumpSipsQueue();
-  });
-}
-function pumpSipsQueue() {
-  if (sipsRunning >= SIPS_CONCURRENCY || sipsQueue.length === 0) return;
-  const { filePath, resolve, reject } = sipsQueue.shift();
-  sipsRunning++;
-  runSips(filePath).then(resolve, reject).finally(() => {
-    sipsRunning--;
-    pumpSipsQueue();
-  });
-}
-async function runSips(filePath) {
+// child_process.execFile's async spawn reliably throws a synchronous
+// "spawn EBADF" here — a posix_spawn/libuv fd issue specific to spawning
+// from an Electron 43 main process on macOS, reproducible on every call,
+// not just under load. execFileSync doesn't hit it (different underlying
+// spawn path), so that's what get-image-preview uses; the tradeoff is
+// blocking the main process for the call's duration (a couple hundred ms),
+// which is what would otherwise have been spent awaiting it anyway.
+function runSips(filePath) {
   const tmpPath = path.join(os.tmpdir(), `retriever-preview-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
   try {
-    await new Promise((resolve, reject) => {
-      execFile('sips', ['-s', 'format', 'png', '-Z', String(PREVIEW_MAX_DIMENSION), filePath, '--out', tmpPath], (err) => (err ? reject(err) : resolve()));
-    });
-    const buf = await fs.promises.readFile(tmpPath);
+    execFileSync('sips', ['-s', 'format', 'png', '-Z', String(PREVIEW_MAX_DIMENSION), filePath, '--out', tmpPath], { stdio: 'ignore' });
+    const buf = fs.readFileSync(tmpPath);
     return `data:image/png;base64,${buf.toString('base64')}`;
   } finally {
     fs.promises.unlink(tmpPath).catch(() => {});
@@ -317,13 +302,8 @@ app.whenReady().then(() => {
   // preview. Shelling out to macOS's built-in `sips` converts (and, via
   // -Z, downsamples) to PNG in one call, with no new dependency. Everything
   // else still loads straight from disk via file:// (see fileUrl in app.js).
-  //
-  // The grid can request dozens of these at once (every visible TIFF tile
-  // fires one on mount) — spawning that many `sips` children concurrently
-  // hits a real Electron/libuv race on macOS (spawn EBADF, seen in
-  // practice), so calls are serialized through a small queue instead of
-  // firing execFile directly.
-  ipcMain.handle('get-image-preview', (_event, filePath) => runSipsQueued(filePath));
+  // See runSips above for why this is a sync spawn.
+  ipcMain.handle('get-image-preview', (_event, filePath) => runSips(filePath));
 
   // Remembers open tabs (root folder + current subfolder) across relaunches
   // and, since only one folder is ever actually watched at a time (see

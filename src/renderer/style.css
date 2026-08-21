@@ -283,6 +283,12 @@ body {
 .filmstrip-cell { height: 70px; width: 96px; flex: none; border-radius: 3px; background: var(--bg-well); box-sizing: border-box; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 2px; border: 1px solid var(--border-hairline); cursor: pointer; }
 .filmstrip-cell img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
 .filmstrip-cell.current { box-shadow: 0 0 0 2px var(--accent); border-color: transparent; }
+.filmstrip-cell.comparing { box-shadow: 0 0 0 2px var(--accent-text); border-color: transparent; }
+
+.viewer-compare-grid { flex: 1; min-height: 0; box-sizing: border-box; display: grid; gap: 14px; padding: 22px; }
+.viewer-compare-cell { min-width: 0; min-height: 0; background: var(--bg-well); border-radius: 4px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; border: 1px solid var(--border-hairline); }
+.viewer-compare-cell:hover { border-color: var(--accent); }
+.viewer-compare-cell img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; }
 
 /* ---------- filter panel ---------- */
 .filter-panel {
