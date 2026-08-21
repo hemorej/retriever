@@ -7,6 +7,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { execFile } = require('child_process');
 const db = require('./db');
 const { createWatcher, ensureTracked } = require('./watcher');
 const { stripBuffer } = require('./metadata');
@@ -19,6 +20,8 @@ let mainWindow;
 let database;
 let watcher;
 let watchedRoot;
+
+const EXTERNAL_EDITOR_APP = '/Applications/Affinity Photo 2.app';
 
 // Same "-2, -3, …" collision scheme as duplicate-file, generalized to an
 // arbitrary destination directory (move/copy land files there, possibly
@@ -227,10 +230,20 @@ app.whenReady().then(() => {
     return results;
   });
 
-  // Opens the file in the OS-default handler for it — the "external editor"
-  // is whatever app the user's system already has associated with the file
-  // type. There's no in-app preferences store yet to pin a specific app.
+  // Opens the file in Affinity Photo if it's installed; otherwise falls
+  // back to the OS-default handler for the file type. There's no in-app
+  // preferences store yet to pin a different specific app.
   ipcMain.handle('open-in-external-editor', async (_event, filePath) => {
+    if (fs.existsSync(EXTERNAL_EDITOR_APP)) {
+      try {
+        await new Promise((resolve, reject) => {
+          execFile('open', ['-a', EXTERNAL_EDITOR_APP, filePath], (err) => (err ? reject(err) : resolve()));
+        });
+        return;
+      } catch {
+        // Fall through to the OS default handler below.
+      }
+    }
     const err = await shell.openPath(filePath);
     if (err) throw new Error(err);
   });

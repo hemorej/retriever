@@ -96,7 +96,7 @@
     emits: ['action', 'close'],
     template: `
       <div class="context-menu" :style="{ left: x + 'px', top: y + 'px' }" @click.stop @contextmenu.prevent>
-        <div class="item primary" @click="$emit('action', 'open-photoshop')"><span>Open in Photoshop</span></div>
+        <div class="item primary" @click="$emit('action', 'open-editor')"><span>Open in Editor</span></div>
         <div class="item" @click="$emit('action', 'rename')"><span>Rename…</span><span class="hint">↩</span></div>
         <div class="item" @click="$emit('action', 'duplicate')"><span>Duplicate</span><span class="hint">⌘D</span></div>
         <div class="sep"></div>
@@ -858,7 +858,7 @@
         const p = state.contextMenu.targetPath;
         state.contextMenu.open = false;
         switch (action) {
-          case 'open-photoshop': openInExternalEditor(p); break;
+          case 'open-editor': openInExternalEditor(p); break;
           case 'rename': startInlineRename(p); break;
           case 'duplicate': duplicateFiles(state.selection.length ? state.selection : [p]); break;
           case 'move': moveOrCopySelection('move'); break;
@@ -1359,7 +1359,7 @@
           <div class="chip">100%</div>
           <div class="chip"><span @click="rotateSelection(-90)">↺</span> Rotate <span @click="rotateSelection(90)">↻</span></div>
           <div class="chip" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 300; state.tagMenu.y = 60">Tag ▾</div>
-          <div class="chip" @click="openInExternalEditor(activePath)">Open in Photoshop</div>
+          <div class="chip" @click="openInExternalEditor(activePath)">Open in Editor</div>
           <div class="spacer"></div>
           <span style="font-family:'Geist Mono',ui-monospace,monospace;color:#8f8c89">{{ navOrder.indexOf(activePath) + 1 }} / {{ navOrder.length }}</span>
           <div style="display:flex;gap:2px">
