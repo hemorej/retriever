@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="_ds/modernist-2fc879c1-6fe2-4c9b-b1c6-8488dfdd03f7/styles.css">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9e6e0;font-family:Geist,system-ui,sans-serif}
+a{color:#5b6b8c}a:hover{color:#2f3d5c}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 Geist,system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 Geist,system-ui,sans-serif;color:rgba(0,0,0,.55)}
+.dv-card{max-width:100%;border-radius:11px;overflow:hidden;box-shadow:0 18px 40px -18px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.2)}
+.dv-opt:target .dv-oid{background:#8a6a10;color:#fff}
+.dv-next{margin:22px 0 0;font:12px/1.5 Geist,system-ui,sans-serif;color:rgba(0,0,0,.5)}
+</style></helmet>
+
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Panels, dialogs and system states — in <a class="dv-oid" href="#1a">1a</a>’s dark vocabulary</span></div>
+<div class="dv-opts">
+
+<!-- 2a filter panel -->
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Filter panel — slides over the tree, builds the chips shown in <a class="dv-oid" href="#1a">1a</a>.</div>
+<div class="dv-card" style="width:304px">
+<div style="width:304px;background:#171718;color:#e6e4e2;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;border-right:1px solid #0c0c0d">
+  <div style="height:38px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px;background:#1f1f21;border-bottom:1px solid #0c0c0d">
+    <span style="font-size:12px;font-weight:600">Filter</span>
+    <span style="font-size:10.5px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">1284 of 8214</span>
+    <span style="margin-left:auto;font-size:11px;color:#f0cf72">Reset</span>
+  </div>
+  <div style="padding:12px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Tags</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:12px">
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:5px;background:rgba(230,180,34,.15);border:1px solid rgba(230,180,34,.32)"><span style="width:11px;height:11px;border-radius:3px;background:#e6b422;display:grid;place-items:center;color:#241a06;font-size:9px">✓</span><span style="width:8px;height:8px;border-radius:2px;background:#4a9d5f"></span>select<span style="margin-left:auto;font-size:10px;color:#8f8c89;font-family:'Geist Mono',ui-monospace,monospace">212</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:5px"><span style="width:11px;height:11px;border-radius:3px;border:1px solid #4a4846"></span><span style="width:8px;height:8px;border-radius:2px;background:#c9503f"></span>reject<span style="margin-left:auto;font-size:10px;color:#8f8c89;font-family:'Geist Mono',ui-monospace,monospace">640</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:5px"><span style="width:11px;height:11px;border-radius:3px;border:1px solid #4a4846"></span><span style="width:8px;height:8px;border-radius:2px;background:#d9a13d"></span>maybe<span style="margin-left:auto;font-size:10px;color:#8f8c89;font-family:'Geist Mono',ui-monospace,monospace">98</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:5px"><span style="width:11px;height:11px;border-radius:3px;border:1px solid #4a4846"></span><span style="width:8px;height:8px;border-radius:2px;background:#e6b422"></span>published<span style="margin-left:auto;font-size:10px;color:#8f8c89;font-family:'Geist Mono',ui-monospace,monospace">34</span></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;font-size:10.5px;color:#8f8c89;padding-left:2px"><span style="padding:2px 7px;border-radius:11px;background:#232325;color:#e6e4e2">any</span><span style="padding:2px 7px;border-radius:11px">all</span><span>· match</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">File type</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11.5px">
+        <span style="padding:3px 9px;border-radius:12px;background:rgba(230,180,34,.15);border:1px solid rgba(230,180,34,.32);color:#f0cf72">jpeg 902</span>
+        <span style="padding:3px 9px;border-radius:12px;background:rgba(230,180,34,.15);border:1px solid rgba(230,180,34,.32);color:#f0cf72">tiff 214</span>
+        <span style="padding:3px 9px;border-radius:12px;background:#232325;color:#a5a29f">png 148</span>
+        <span style="padding:3px 9px;border-radius:12px;background:#232325;color:#a5a29f">webp 20</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Resolution</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-family:'Geist Mono',ui-monospace,monospace;color:#dedbd8">
+        <span style="flex:1;padding:5px 8px;border-radius:5px;background:#0e0e0f;border:1px solid #2b2b2d">≥ 2000 px</span>
+        <span style="color:#63605e">to</span>
+        <span style="flex:1;padding:5px 8px;border-radius:5px;background:#0e0e0f;border:1px solid #2b2b2d;color:#63605e">any</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Other</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#c6c3c0">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 7px"><span style="width:11px;height:11px;border-radius:3px;background:#e6b422;display:grid;place-items:center;color:#241a06;font-size:9px">✓</span>Grouped items only</div>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 7px"><span style="width:11px;height:11px;border-radius:3px;border:1px solid #4a4846"></span>Has GPS metadata</div>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 7px"><span style="width:11px;height:11px;border-radius:3px;border:1px solid #4a4846"></span>Untagged only</div>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 7px"><span style="width:11px;height:11px;border-radius:3px;border:1px solid #4a4846"></span>Include subfolders</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;padding-top:2px">
+      <div style="flex:1;padding:7px;border-radius:6px;background:#e6b422;color:#241a06;font-size:11.5px;font-weight:600;text-align:center">Apply</div>
+      <div style="padding:7px 12px;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Save as view</div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- 2b mass rename -->
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Mass rename — token row up top, live before/after for the 3 selected files.</div>
+<div class="dv-card" style="width:720px">
+<div style="width:720px;background:#1f1f21;color:#e6e4e2;font-family:Geist,system-ui,sans-serif;border:1px solid #3c3c3f">
+  <div style="height:42px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #2f2f31">
+    <span style="font-size:13px;font-weight:600">Rename 3 files</span>
+    <span style="font-size:11px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">~/Pictures/2026/Selects</span>
+    <span style="margin-left:auto;color:#7d7a77;font-size:14px">×</span>
+  </div>
+  <div style="padding:14px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Pattern</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 9px;border-radius:6px;background:#0e0e0f;border:1px solid #e6b422;flex-wrap:wrap">
+        <span style="padding:3px 8px;border-radius:4px;background:rgba(230,180,34,.16);color:#f0cf72;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace">kestrel</span>
+        <span style="color:#4f4d4b">·</span>
+        <span style="padding:3px 8px;border-radius:4px;background:#2b2b2d;color:#dedbd8;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace">{capture:yyyy-mm-dd}</span>
+        <span style="color:#4f4d4b">·</span>
+        <span style="padding:3px 8px;border-radius:4px;background:#2b2b2d;color:#dedbd8;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace">{counter:001}</span>
+        <span style="width:1px;height:14px;background:#e6b422"></span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:#a5a29f">
+        <span style="padding:3px 8px;border-radius:12px;background:#2b2b2d">+ text</span>
+        <span style="padding:3px 8px;border-radius:12px;background:#2b2b2d">+ counter</span>
+        <span style="padding:3px 8px;border-radius:12px;background:#2b2b2d">+ capture date</span>
+        <span style="padding:3px 8px;border-radius:12px;background:#2b2b2d">+ original name</span>
+        <span style="padding:3px 8px;border-radius:12px;background:#2b2b2d">+ folder</span>
+        <span style="padding:3px 8px;border-radius:12px;background:#2b2b2d">+ dimensions</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:22px;font-size:11.5px;color:#c6c3c0">
+      <span>Start at <span style="font-family:'Geist Mono',ui-monospace,monospace;color:#e6e4e2">001</span></span>
+      <span>Separator <span style="font-family:'Geist Mono',ui-monospace,monospace;color:#e6e4e2">_</span></span>
+      <span>Case <span style="font-family:'Geist Mono',ui-monospace,monospace;color:#e6e4e2">lower</span></span>
+      <span style="margin-left:auto;color:#8f8c89">Extension unchanged</span>
+    </div>
+    <div style="border:1px solid #2f2f31;border-radius:6px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:1fr 18px 1fr;gap:0;background:#191919;padding:7px 11px;font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#63605e"><span>current</span><span></span><span>new</span></div>
+      <div style="display:grid;grid-template-columns:1fr 18px 1fr;padding:8px 11px;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace;border-top:1px solid #2a2a2c"><span style="color:#a5a29f">kestrel_0114.jpg</span><span style="color:#4f4d4b">→</span><span style="color:#f0eeec">kestrel_2026-08-19_001.jpg</span></div>
+      <div style="display:grid;grid-template-columns:1fr 18px 1fr;padding:8px 11px;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace;border-top:1px solid #2a2a2c"><span style="color:#a5a29f">dune_edge_02.tif</span><span style="color:#4f4d4b">→</span><span style="color:#f0eeec">kestrel_2026-08-19_002.tif</span></div>
+      <div style="display:grid;grid-template-columns:1fr 18px 1fr;padding:8px 11px;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace;border-top:1px solid #2a2a2c"><span style="color:#a5a29f">scan_0392.tif</span><span style="color:#4f4d4b">→</span><span style="color:#f0eeec">kestrel_2026-08-20_003.tif</span></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-top:1px solid #2a2a2c;background:rgba(201,80,63,.09);font-size:11px;color:#e79486"><span>⚠</span>kestrel_2026-08-19_001.jpg already exists in this folder — Retriever will append <span style="font-family:'Geist Mono',ui-monospace,monospace">-2</span></div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid #2f2f31">
+    <span style="font-size:11px;color:#8f8c89">Renames on disk. Undo with ⌘Z.</span>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <div style="padding:7px 14px;border-radius:6px;background:#2b2b2d;font-size:11.5px;color:#cfccc9">Cancel</div>
+      <div style="padding:7px 14px;border-radius:6px;background:#e6b422;color:#241a06;font-size:11.5px;font-weight:600">Rename 3</div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- 2c metadata cleanup -->
+<div class="dv-opt" id="2c">
+<div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>Metadata cleanup — shows what will be stripped and what survives.</div>
+<div class="dv-card" style="width:520px">
+<div style="width:520px;background:#1f1f21;color:#e6e4e2;font-family:Geist,system-ui,sans-serif;border:1px solid #3c3c3f">
+  <div style="height:42px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #2f2f31">
+    <span style="font-size:13px;font-weight:600">Remove metadata</span>
+    <span style="font-size:11px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">group “window_seq” · 5 files · 41 MB</span>
+    <span style="margin-left:auto;color:#7d7a77;font-size:14px">×</span>
+  </div>
+  <div style="padding:14px;display:flex;flex-direction:column;gap:13px">
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Will be removed</div>
+      <div style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:#c6c3c0">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:11px;height:11px;border-radius:3px;background:#e6b422;display:grid;place-items:center;color:#241a06;font-size:9px">✓</span>EXIF — camera, lens, exposure<span style="margin-left:auto;font-size:10.5px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">5 files</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:11px;height:11px;border-radius:3px;background:#e6b422;display:grid;place-items:center;color:#241a06;font-size:9px">✓</span>GPS location<span style="margin-left:auto;font-size:10.5px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">3 files</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:11px;height:11px;border-radius:3px;background:#e6b422;display:grid;place-items:center;color:#241a06;font-size:9px">✓</span>IPTC — creator, copyright, captions<span style="margin-left:auto;font-size:10.5px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">5 files</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:11px;height:11px;border-radius:3px;border:1px solid #4a4846"></span>Embedded thumbnails<span style="margin-left:auto;font-size:10.5px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">5 files</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:11px;height:11px;border-radius:3px;border:1px solid #4a4846"></span>ICC color profile<span style="margin-left:auto;font-size:10.5px;color:#e79486">affects color</span></div>
+      </div>
+    </div>
+    <div style="height:1px;background:#2f2f31"></div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Kept</div>
+      <div style="font-size:11.5px;color:#8f8c89;line-height:1.7">Pixels, orientation, and Retriever’s own tags and groups — those live in Retriever’s catalog, not in the file.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:6px;background:rgba(230,180,34,.1);border:1px solid rgba(230,180,34,.28);font-size:11.5px;color:#f0cf72">
+      <span style="width:11px;height:11px;border-radius:3px;background:#e6b422;display:grid;place-items:center;color:#241a06;font-size:9px">✓</span>Keep an untouched copy in <span style="font-family:'Geist Mono',ui-monospace,monospace">_originals/</span>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid #2f2f31">
+    <span style="font-size:11px;color:#8f8c89">Writes to the files on disk.</span>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <div style="padding:7px 14px;border-radius:6px;background:#2b2b2d;font-size:11.5px;color:#cfccc9">Cancel</div>
+      <div style="padding:7px 14px;border-radius:6px;background:#c9503f;color:#fff;font-size:11.5px;font-weight:600">Strip 5 files</div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- 2d shortcuts -->
+<div class="dv-opt" id="2d">
+<div class="dv-olabel"><a class="dv-oid" href="#2d">2d</a>Shortcuts sheet — held open with ⌘/, four columns of what’s actually bound.</div>
+<div class="dv-card" style="width:880px">
+<div style="width:880px;background:rgba(24,24,25,.98);color:#e6e4e2;font-family:Geist,system-ui,sans-serif;border:1px solid #3c3c3f">
+  <div style="height:44px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid #2f2f31">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 8c0-2.2.9-3.6 1.9-3.6.9 0 1.6 1 1.9 2.4h8.4c.3-1.4 1-2.4 1.9-2.4C19.1 4.4 20 5.8 20 8v3.4c0 4.3-3.4 7.6-8 7.6s-8-3.3-8-7.6V8z" fill="#e6b422"/><circle cx="9.4" cy="11.2" r="1.05" fill="#131314"/><circle cx="14.6" cy="11.2" r="1.05" fill="#131314"/></svg>
+    <span style="font-size:13px;font-weight:600">Keyboard shortcuts</span>
+    <span style="font-size:11px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">hold ⌘/ · release to dismiss</span>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:7px;height:24px;padding:0 9px;border-radius:5px;background:#0e0e0f;border:1px solid #2b2b2d;font-size:11px;color:#6e6b68">search shortcuts</span>
+  </div>
+  <div style="padding:16px;display:grid;grid-template-columns:repeat(4,1fr);gap:22px">
+    <div style="display:flex;flex-direction:column;gap:11px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#e6b422">Navigate</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace;color:#c6c3c0">
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">↑ ↓ ← →</span>move selection</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">↵</span>open fit-width</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">esc</span>back to grid</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘T</span>new tab</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘1–9</span>go to tab</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⌥←</span>parent folder</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘F</span>search filenames</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘L</span>filter panel</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:11px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#e6b422">Select &amp; group</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace;color:#c6c3c0">
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘A</span>select all</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⇧click</span>extend</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘click</span>add / remove</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘G</span>group selection</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⇧G</span>ungroup</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">→</span>expand group</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">←</span>collapse group</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⌥G</span>add to group</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:11px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#e6b422">Tag &amp; sort</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace;color:#c6c3c0">
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">1</span>select</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">2</span>reject</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">3</span>maybe</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">4</span>published</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">0</span>clear tags</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⌥1</span>sort by name</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⌥2</span>sort by date</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⌥3</span>sort by size</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:11px">
+      <div style="font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#e6b422">Files</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px;font-family:'Geist Mono',ui-monospace,monospace;color:#c6c3c0">
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">[ ]</span>rotate ccw / cw</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘R</span>rename…</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⇧R</span>mass rename…</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘D</span>duplicate</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⌥M</span>move to…</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⌥C</span>copy to…</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⌫</span>strip metadata</div>
+        <div style="display:flex;gap:10px"><span style="color:#7d7a77;width:52px;flex:none">⌘⇧O</span>reveal in Finder</div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;padding:11px 16px;border-top:1px solid #2f2f31;font-size:11px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">
+    <span>⌘Z undo — covers renames, moves, rotations and strips</span>
+    <span style="margin-left:auto">⌘, preferences</span>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- 2e system states -->
+<div class="dv-opt" id="2e">
+<div class="dv-olabel"><a class="dv-oid" href="#2e">2e</a>System &amp; edge states — what the window says when the filesystem moves under it.</div>
+<div class="dv-card" style="width:1180px">
+<div style="width:1180px;background:#1b1b1c;color:#e6e4e2;font-family:Geist,system-ui,sans-serif;padding:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+
+  <div style="background:#131314;border:1px solid #232325;display:flex;flex-direction:column">
+    <div style="padding:8px 11px;border-bottom:1px solid #232325;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">No folder chosen</div>
+    <div style="flex:1;padding:26px 20px;display:flex;flex-direction:column;align-items:flex-start;gap:11px">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><path d="M4 8c0-2.2.9-3.6 1.9-3.6.9 0 1.6 1 1.9 2.4h8.4c.3-1.4 1-2.4 1.9-2.4C19.1 4.4 20 5.8 20 8v3.4c0 4.3-3.4 7.6-8 7.6s-8-3.3-8-7.6V8z" fill="#3a3733"/><circle cx="9.4" cy="11.2" r="1.05" fill="#131314"/><circle cx="14.6" cy="11.2" r="1.05" fill="#131314"/></svg>
+      <div style="font-size:13px;font-weight:600">Point Retriever at a folder</div>
+      <div style="font-size:11.5px;color:#8f8c89;line-height:1.6">It watches everything inside it from then on. No import step.</div>
+      <div style="display:flex;gap:8px;padding-top:2px"><span style="padding:6px 12px;border-radius:6px;background:#e6b422;color:#241a06;font-size:11.5px;font-weight:600">Choose folder…</span><span style="padding:6px 12px;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Use ~/Pictures</span></div>
+    </div>
+  </div>
+
+  <div style="background:#131314;border:1px solid #232325;display:flex;flex-direction:column">
+    <div style="padding:8px 11px;border-bottom:1px solid #232325;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Folder has no photos</div>
+    <div style="flex:1;padding:26px 20px;display:flex;flex-direction:column;align-items:flex-start;gap:11px">
+      <div style="font-size:13px;font-weight:600">Nothing here yet</div>
+      <div style="font-size:11.5px;color:#8f8c89;line-height:1.6"><span style="font-family:'Geist Mono',ui-monospace,monospace;color:#c6c3c0">2026/Scans</span> holds 4 files Retriever doesn’t read — 2 PSD, 1 MOV, 1 PDF.</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#7ac47a;font-family:'Geist Mono',ui-monospace,monospace"><span style="width:6px;height:6px;border-radius:50%;background:#7ac47a"></span>watching — drop files in and they appear</div>
+      <div style="margin-top:auto;padding:9px 10px;border:1px dashed #3a3a3d;width:100%;font-size:11px;color:#6e6b68;text-align:center">drop photos here</div>
+    </div>
+  </div>
+
+  <div style="background:#131314;border:1px solid #232325;display:flex;flex-direction:column">
+    <div style="padding:8px 11px;border-bottom:1px solid #232325;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Filtered to nothing</div>
+    <div style="flex:1;padding:26px 20px;display:flex;flex-direction:column;align-items:flex-start;gap:11px">
+      <div style="font-size:13px;font-weight:600">0 of 1284 match</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;font-family:'Geist Mono',ui-monospace,monospace">
+        <span style="padding:2px 7px;border-radius:11px;background:rgba(230,180,34,.13);color:#f0cf72">tag: published</span>
+        <span style="padding:2px 7px;border-radius:11px;background:rgba(230,180,34,.13);color:#f0cf72">type: webp</span>
+        <span style="padding:2px 7px;border-radius:11px;background:rgba(230,180,34,.13);color:#f0cf72">≥ 6000 px</span>
+      </div>
+      <div style="font-size:11.5px;color:#8f8c89;line-height:1.6">Drop the resolution rule and 20 files come back.</div>
+      <div style="display:flex;gap:8px;padding-top:2px"><span style="padding:6px 12px;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Clear filters</span><span style="padding:6px 12px;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Edit filter</span></div>
+    </div>
+  </div>
+
+  <div style="background:#131314;border:1px solid #232325;display:flex;flex-direction:column">
+    <div style="padding:8px 11px;border-bottom:1px solid #232325;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Selected file vanished</div>
+    <div style="flex:1;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="height:96px;border:1px dashed #4a3a2a;background:repeating-linear-gradient(45deg,#191919,#191919 6px,#1d1a16 6px,#1d1a16 12px);display:flex;align-items:center;justify-content:center;font-size:11px;color:#8f8c89;font-family:'Geist Mono',ui-monospace,monospace">moved or deleted on disk</div>
+      <div style="font-size:11.5px;color:#c6c3c0;line-height:1.6"><span style="font-family:'Geist Mono',ui-monospace,monospace">kestrel_0114.jpg</span> left this folder 2 seconds ago. Its tags and its place in <span style="color:#f0cf72">window_seq</span> are held for 30 days.</div>
+      <div style="display:flex;gap:8px;margin-top:auto"><span style="padding:6px 12px;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Find it</span><span style="padding:6px 12px;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Forget</span></div>
+    </div>
+  </div>
+
+  <div style="background:#131314;border:1px solid #232325;display:flex;flex-direction:column">
+    <div style="padding:8px 11px;border-bottom:1px solid #232325;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">Permission denied</div>
+    <div style="flex:1;padding:16px;display:flex;flex-direction:column;gap:11px">
+      <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;background:rgba(201,80,63,.1);border:1px solid rgba(201,80,63,.3);font-size:11.5px;color:#e79486">macOS won’t let Retriever read this folder</div>
+      <div style="font-size:11.5px;color:#8f8c89;line-height:1.6;font-family:'Geist Mono',ui-monospace,monospace">/Volumes/Archive_2019</div>
+      <div style="font-size:11.5px;color:#8f8c89;line-height:1.6">Grant access under Privacy &amp; Security → Files and Folders. The watch resumes on its own.</div>
+      <div style="display:flex;gap:8px;margin-top:auto"><span style="padding:6px 12px;border-radius:6px;background:#e6b422;color:#241a06;font-size:11.5px;font-weight:600">Open settings</span><span style="padding:6px 12px;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Retry</span></div>
+    </div>
+  </div>
+
+  <div style="background:#131314;border:1px solid #232325;display:flex;flex-direction:column">
+    <div style="padding:8px 11px;border-bottom:1px solid #232325;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#63605e">First index · thumbnails decoding</div>
+    <div style="flex:1;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div style="height:52px;background:#0f0f10;border:1px solid #232325;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:2px"><img src="photos/p07.png" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block" /></div>
+        <div style="height:52px;background:#191919;border:1px solid #232325"></div>
+        <div style="height:52px;background:#191919;border:1px solid #232325"></div>
+        <div style="height:52px;background:#191919;border:1px solid #232325;display:grid;place-items:center;font-size:9px;color:#6e6b68;font-family:'Geist Mono',ui-monospace,monospace">?</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#8f8c89;font-family:'Geist Mono',ui-monospace,monospace"><span>indexing 8214 files</span><span>62%</span></div>
+        <div style="height:3px;background:#2a2a2c;position:relative"><div style="position:absolute;inset:0 38% 0 0;background:#e6b422"></div></div>
+      </div>
+      <div style="font-size:11.5px;color:#8f8c89;line-height:1.6">Browsing works now — thumbnails fill in behind you. One file won’t decode: <span style="font-family:'Geist Mono',ui-monospace,monospace;color:#c6c3c0">frame_test.jpg</span> is truncated.</div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: “add move-to / copy-to destination pickers” · “show the multi-select info strip with mixed values” · “design the app icon properly”</p>
+</section>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Retriever — dark direction, yellow accent</span></div>
+
+<div class="dv-opts">
+
+<!-- ============ 1a : DARK CONTACT SHEET ============ -->
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Dark contact sheet — departs from Modernist on purpose: a dark neutral chrome so photographs carry the only brightness on screen. Dense, Bridge-like.</div>
+<div class="dv-card" style="width:1440px">
+<div style="width:1440px;height:900px;background:#131314;color:#e6e4e2;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;position:relative">
+
+  <!-- title bar + tabs -->
+  <div style="height:40px;flex:none;display:flex;align-items:flex-end;gap:14px;padding:0 12px;background:linear-gradient(#232326,#1b1b1d);border-bottom:1px solid #0c0c0d">
+    <div style="display:flex;gap:8px;align-items:center;height:40px">
+      <div style="width:11px;height:11px;border-radius:50%;background:#ec6a5e"></div>
+      <div style="width:11px;height:11px;border-radius:50%;background:#f4bf4f"></div>
+      <div style="width:11px;height:11px;border-radius:50%;background:#61c454"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;height:40px;padding-left:6px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 8c0-2.2.9-3.6 1.9-3.6.9 0 1.6 1 1.9 2.4h8.4c.3-1.4 1-2.4 1.9-2.4C19.1 4.4 20 5.8 20 8v3.4c0 4.3-3.4 7.6-8 7.6s-8-3.3-8-7.6V8z" fill="#c9a24d"/><circle cx="9.4" cy="11.2" r="1.05" fill="#131314"/><circle cx="14.6" cy="11.2" r="1.05" fill="#131314"/><path d="M12 13.4c-.8 0-1.5.5-1.5 1.1s.7 1.1 1.5 1.1 1.5-.5 1.5-1.1-.7-1.1-1.5-1.1z" fill="#2a2a2a"/></svg>
+      <span style="font-size:12px;font-weight:600;letter-spacing:.2px;color:#b9b6b2">Retriever</span>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:2px;flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;background:#131314;border:1px solid #0c0c0d;border-bottom-color:#131314;border-radius:7px 7px 0 0;font-size:12px;color:#f0eeec;max-width:220px">
+        <span style="width:6px;height:6px;border-radius:50%;background:#7ac47a;flex:none"></span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">2026 Selects</span>
+        <span style="color:#6d6a67;font-size:13px;margin-left:2px">×</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;height:28px;padding:0 12px;background:#1f1f21;border-radius:7px 7px 0 0;font-size:12px;color:#9c9895;max-width:210px">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Client — Kestrel</span>
+        <span style="color:#5d5a57;font-size:13px">×</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;height:28px;padding:0 12px;background:#1f1f21;border-radius:7px 7px 0 0;font-size:12px;color:#9c9895;max-width:180px">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">~/Downloads</span>
+        <span style="color:#5d5a57;font-size:13px">×</span>
+      </div>
+      <div style="width:26px;height:28px;display:grid;place-items:center;color:#7d7a77;font-size:15px">+</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;height:40px;padding-right:2px;font-size:11px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">
+      <span style="width:6px;height:6px;border-radius:50%;background:#7ac47a;box-shadow:0 0 0 3px rgba(122,196,122,.18)"></span>
+      <span>watching 3 folders</span>
+    </div>
+  </div>
+
+  <!-- toolbar -->
+  <div style="height:44px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px;background:#191919;border-bottom:1px solid #0c0c0d">
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8f8c89;font-family:'Geist Mono',ui-monospace,monospace">
+      <span>~</span><span style="color:#4f4d4b">/</span><span>Pictures</span><span style="color:#4f4d4b">/</span><span>2026</span><span style="color:#4f4d4b">/</span><span style="color:#e6e4e2">Selects</span>
+    </div>
+    <div style="width:1px;height:20px;background:#2a2a2c;margin:0 2px"></div>
+    <div style="display:flex;align-items:center;gap:2px">
+      <div style="height:26px;padding:0 9px;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">↺<span>Rotate</span>↻</div>
+      <div style="height:26px;padding:0 9px;display:flex;align-items:center;white-space:nowrap;flex:none;border-radius:6px;background:rgba(230,180,34,.15);color:#f0cf72;font-size:11.5px;border:1px solid rgba(230,180,34,.32)">Group 3</div>
+      <div style="height:26px;padding:0 9px;display:flex;align-items:center;white-space:nowrap;flex:none;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Tag ▾</div>
+      <div style="height:26px;padding:0 9px;display:flex;align-items:center;white-space:nowrap;flex:none;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Rename…</div>
+      <div style="height:26px;padding:0 9px;display:flex;align-items:center;white-space:nowrap;flex:none;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Clean metadata</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:6px;background:#0e0e0f;border:1px solid #2b2b2d;width:210px;font-size:11.5px;color:#6e6b68">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#6e6b68" stroke-width="1.6"><circle cx="6.6" cy="6.6" r="4.4"/><path d="M10 10l3.4 3.4"/></svg>
+      <span style="color:#d6d3d0">kestrel_</span><span style="width:1px;height:13px;background:#e6b422"></span>
+    </div>
+    <div style="height:26px;padding:0 9px;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Filter <span style="background:#e6b422;color:#241a06;border-radius:9px;padding:1px 5px;font-size:10px;font-weight:600">2</span></div>
+    <div style="height:26px;padding:0 9px;display:flex;align-items:center;white-space:nowrap;flex:none;border-radius:6px;background:#232325;font-size:11.5px;color:#cfccc9">Sort: Date ↓</div>
+    <div style="display:flex;align-items:center;gap:7px;padding-left:2px">
+      <svg width="10" height="10" viewBox="0 0 12 12" fill="#6e6b68"><rect x="0" y="0" width="5" height="5"/><rect x="7" y="0" width="5" height="5"/><rect x="0" y="7" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/></svg>
+      <div style="width:82px;height:3px;border-radius:2px;background:#2f2f31;position:relative">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:46%;background:#8d8a87;border-radius:2px"></div>
+        <div style="position:absolute;left:46%;top:-4px;width:11px;height:11px;border-radius:50%;background:#e6e4e2;box-shadow:0 1px 3px rgba(0,0,0,.5)"></div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="#6e6b68"><rect x="0" y="0" width="14" height="14"/></svg>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <!-- tree -->
+    <div style="width:236px;flex:none;background:#171718;border-right:1px solid #0c0c0d;display:flex;flex-direction:column;font-size:12px">
+      <div style="padding:12px 12px 6px;font-size:10px;letter-spacing:.9px;text-transform:uppercase;color:#5f5c5a;font-weight:500">Places</div>
+      <div style="padding:0 6px;display:flex;flex-direction:column;gap:1px">
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:5px;color:#c6c3c0">▾ <span>Macintosh HD</span></div>
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 22px;border-radius:5px;color:#c6c3c0">▾ <span>Pictures</span><span style="margin-left:auto;font-size:10px;color:#5f5c5a;font-family:'Geist Mono',ui-monospace,monospace">8.2k</span></div>
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 36px;border-radius:5px;color:#c6c3c0">▾ <span>2026</span></div>
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 52px;border-radius:5px;background:rgba(230,180,34,.15);color:#f9edc9;border:1px solid rgba(230,180,34,.3)"><span>Selects</span><span style="margin-left:auto;font-size:10px;color:#e6b422;font-family:'Geist Mono',ui-monospace,monospace">1284</span></div>
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 52px;border-radius:5px;color:#a5a29f">Rejects</div>
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 52px;border-radius:5px;color:#a5a29f;border:1px dashed rgba(230,180,34,.5);background:rgba(230,180,34,.07)">Scans<span style="margin-left:auto;font-size:10px;color:#e6b422">drop 3</span></div>
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 36px;border-radius:5px;color:#a5a29f">▸ <span>2025</span></div>
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 22px;border-radius:5px;color:#a5a29f">▸ <span>Downloads</span></div>
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 22px;border-radius:5px;color:#a5a29f">▸ <span>Desktop</span></div>
+      </div>
+      <div style="padding:16px 12px 6px;font-size:10px;letter-spacing:.9px;text-transform:uppercase;color:#5f5c5a;font-weight:500">Tags</div>
+      <div style="padding:0 6px;display:flex;flex-direction:column;gap:1px">
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;color:#c6c3c0"><span style="width:8px;height:8px;border-radius:2px;background:#4a9d5f"></span>select<span style="margin-left:auto;font-size:10px;color:#5f5c5a;font-family:'Geist Mono',ui-monospace,monospace">212</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;color:#c6c3c0"><span style="width:8px;height:8px;border-radius:2px;background:#c9503f"></span>reject<span style="margin-left:auto;font-size:10px;color:#5f5c5a;font-family:'Geist Mono',ui-monospace,monospace">640</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;color:#c6c3c0"><span style="width:8px;height:8px;border-radius:2px;background:#d9a13d"></span>maybe<span style="margin-left:auto;font-size:10px;color:#5f5c5a;font-family:'Geist Mono',ui-monospace,monospace">98</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;background:#212123;color:#e6e4e2"><span style="width:8px;height:8px;border-radius:2px;background:#e6b422"></span>published<span style="margin-left:auto;font-size:10px;color:#5f5c5a;font-family:'Geist Mono',ui-monospace,monospace">34</span></div>
+      </div>
+      <div style="margin-top:auto;padding:10px 12px;border-top:1px solid #232325;font-size:10.5px;color:#5f5c5a;font-family:'Geist Mono',ui-monospace,monospace;line-height:1.6">
+        <div>fsevents · 42ms ago</div>
+        <div style="color:#7ac47a">+3 added · 1 moved</div>
+      </div>
+    </div>
+
+    <!-- grid -->
+    <div style="flex:1;min-width:0;background:#1b1b1c;padding:14px 16px;display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:9px;font-size:11px;color:#8f8c89;font-family:'Geist Mono',ui-monospace,monospace;white-space:nowrap">
+        <span style="color:#f0cf72">filter:</span><span style="padding:2px 7px;border-radius:11px;background:rgba(230,180,34,.13);color:#f0cf72">tag: select</span><span style="padding:2px 7px;border-radius:11px;background:rgba(230,180,34,.13);color:#f0cf72">type: jpeg, tiff</span><span>· 1284 of 8214 shown</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:16px 18px;align-content:start">
+
+        <!-- selected -->
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="height:140px;border-radius:4px;background:#0f0f10;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px;box-shadow:0 0 0 2px #e6b422">
+            <img src="photos/p01.png" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block" />
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:#e6e4e2;font-family:'Geist Mono',ui-monospace,monospace"><span style="width:7px;height:7px;border-radius:2px;background:#4a9d5f;flex:none"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">kestrel_0114.jpg</span></div>
+        </div>
+
+        <!-- collapsed stack -->
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="position:relative;height:140px">
+            <div style="position:absolute;inset:6px -5px -5px 6px;border-radius:4px;background:#242426;border:1px solid #303032"></div>
+            <div style="position:absolute;inset:3px -2px -2px 3px;border-radius:4px;background:#2b2b2d;border:1px solid #37373a"></div>
+            <div style="position:absolute;inset:0;border-radius:4px;background:#0f0f10;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px;border:1px solid #3a3a3d">
+              <img src="photos/p04.png" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block" />
+            </div>
+            <div style="position:absolute;left:5px;top:5px;display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:10px;background:rgba(10,10,11,.82);font-size:10px;font-weight:600;color:#e6e4e2;font-family:'Geist Mono',ui-monospace,monospace">▸ 4</div>
+          </div>
+          <div style="font-size:10.5px;color:#a5a29f;font-family:'Geist Mono',ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">bracket_dune ⌗</div>
+        </div>
+
+        <sc-for list="{{ gridA }}" as="it" hint-placeholder-count="10">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="height:140px;border-radius:4px;background:#0f0f10;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px;border:1px solid #232325">
+              <div style="width:100%;height:100%;background-repeat:no-repeat;background-position:center;background-size:contain;background-image:url({{ it.src }})"></div>
+            </div>
+            <div style="font-size:10.5px;color:#a5a29f;font-family:'Geist Mono',ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.name }}</div>
+          </div>
+        </sc-for>
+
+        <!-- inline rename -->
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="height:140px;border-radius:4px;background:#0f0f10;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px;border:1px solid #232325">
+            <img src="photos/p12.png" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block" />
+          </div>
+          <div style="display:flex;align-items:center;height:17px;padding:0 4px;border-radius:3px;background:#0b0b0c;border:1px solid #e6b422;font-size:10.5px;color:#f0eeec;font-family:'Geist Mono',ui-monospace,monospace">kestrel_final<span style="width:1px;height:11px;background:#e6b422;margin-left:1px"></span></div>
+        </div>
+
+        <!-- newly detected file -->
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="height:140px;border-radius:4px;background:#0f0f10;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px;box-shadow:0 0 0 1px #7ac47a,0 0 22px -6px rgba(122,196,122,.55)">
+            <img src="photos/p14.png" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block" />
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:#a5a29f;font-family:'Geist Mono',ui-monospace,monospace"><span style="color:#7ac47a">new</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">scan_0392.tif</span></div>
+        </div>
+
+        <sc-for list="{{ gridA2 }}" as="it" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="height:140px;border-radius:4px;background:#0f0f10;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px;border:1px solid #232325">
+              <div style="width:100%;height:100%;background-repeat:no-repeat;background-position:center;background-size:contain;background-image:url({{ it.src }})"></div>
+            </div>
+            <div style="font-size:10.5px;color:#a5a29f;font-family:'Geist Mono',ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.name }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- expanded group band -->
+      <div style="border:1px solid rgba(230,180,34,.34);background:rgba(230,180,34,.06);border-radius:8px;padding:10px 12px 12px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:center;gap:9px;font-size:11px;color:#f0cf72;font-family:'Geist Mono',ui-monospace,monospace">
+          <span>▾ group “window_seq” · 5 items</span>
+          <span style="margin-left:auto;color:#8f8c89">collapse · add selection · ungroup</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:16px 18px">
+          <sc-for list="{{ groupA }}" as="it" hint-placeholder-count="5">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="height:104px;border-radius:4px;background:#0f0f10;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px;border:1px solid #332a12">
+                <div style="width:100%;height:100%;background-repeat:no-repeat;background-position:center;background-size:contain;background-image:url({{ it.src }})"></div>
+              </div>
+              <div style="font-size:10px;color:#a5a29f;font-family:'Geist Mono',ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.name }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- context menu -->
+      <div style="position:absolute;left:196px;top:132px;width:224px;background:rgba(32,32,34,.97);border:1px solid #3c3c3f;border-radius:8px;padding:5px;box-shadow:0 24px 48px -12px rgba(0,0,0,.7);font-size:12px;color:#dedbd8;display:flex;flex-direction:column;gap:1px">
+        <div style="padding:5px 9px;border-radius:5px;background:#e6b422;color:#241a06">Open in Photoshop</div>
+        <div style="padding:5px 9px;display:flex;justify-content:space-between"><span>Rename…</span><span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">↩</span></div>
+        <div style="padding:5px 9px;display:flex;justify-content:space-between"><span>Duplicate</span><span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">⌘D</span></div>
+        <div style="height:1px;background:#3c3c3f;margin:3px 0"></div>
+        <div style="padding:5px 9px;display:flex;justify-content:space-between"><span>Move to…</span><span style="color:#7d7a77">›</span></div>
+        <div style="padding:5px 9px;display:flex;justify-content:space-between"><span>Copy to…</span><span style="color:#7d7a77">›</span></div>
+        <div style="padding:5px 9px;display:flex;justify-content:space-between"><span>Tag</span><span style="color:#7d7a77">›</span></div>
+        <div style="height:1px;background:#3c3c3f;margin:3px 0"></div>
+        <div style="padding:5px 9px;display:flex;justify-content:space-between"><span>Group selection</span><span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">⌘G</span></div>
+        <div style="padding:5px 9px;display:flex;justify-content:space-between"><span>Rotate</span><span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">[ ]</span></div>
+        <div style="padding:5px 9px">Remove all metadata</div>
+        <div style="height:1px;background:#3c3c3f;margin:3px 0"></div>
+        <div style="padding:5px 9px">Reveal in Finder</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- info strip -->
+  <div style="height:150px;flex:none;background:#171718;border-top:1px solid #0c0c0d;display:flex;padding:14px 16px;gap:20px">
+    <div style="width:120px;height:120px;flex:none;border-radius:4px;background:#0f0f10;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:4px;border:1px solid #232325">
+      <img src="photos/p01.png" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block" />
+    </div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:13px;font-weight:600;color:#f0eeec;font-family:'Geist Mono',ui-monospace,monospace">kestrel_0114.jpg</span>
+        <span style="font-size:10.5px;color:#6e6b68;font-family:'Geist Mono',ui-monospace,monospace">~/Pictures/2026/Selects</span>
+        <span style="margin-left:auto;display:flex;gap:5px">
+          <span style="padding:2px 8px;border-radius:11px;font-size:10.5px;background:rgba(74,157,95,.18);color:#8fd0a2;border:1px solid rgba(74,157,95,.35)">select</span>
+          <span style="padding:2px 8px;border-radius:11px;font-size:10.5px;background:rgba(230,180,34,.15);color:#f0cf72;border:1px solid rgba(230,180,34,.32)">published</span>
+          <span style="padding:2px 8px;border-radius:11px;font-size:10.5px;background:#232325;color:#8f8c89;border:1px dashed #3c3c3f">+ tag</span>
+        </span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:7px 22px;font-size:11px;font-family:'Geist Mono',ui-monospace,monospace">
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">dimensions</div><div style="color:#dedbd8">4032 × 3024</div></div>
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">color space</div><div style="color:#dedbd8">Display P3</div></div>
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">bit depth</div><div style="color:#dedbd8">8 bit / channel</div></div>
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">size</div><div style="color:#dedbd8">6.4 MB · JPEG</div></div>
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">modified</div><div style="color:#dedbd8">Aug 19, 14:02</div></div>
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">camera</div><div style="color:#dedbd8">Leica Q3</div></div>
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">exposure</div><div style="color:#dedbd8">1/250 · f/2.8 · ISO 400</div></div>
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">lens</div><div style="color:#dedbd8">28 mm Summilux</div></div>
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">group</div><div style="color:#f0cf72">window_seq (5)</div></div>
+        <div><div style="color:#63605e;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase">metadata</div><div style="color:#dedbd8">EXIF · IPTC · GPS</div></div>
+      </div>
+    </div>
+    <div style="width:150px;flex:none;display:flex;flex-direction:column;gap:6px;align-items:stretch">
+      <div style="padding:6px 9px;border-radius:6px;background:#232325;font-size:11px;color:#cfccc9;text-align:center">All metadata ▾</div>
+      <div style="padding:6px 9px;border-radius:6px;background:rgba(201,80,63,.12);border:1px solid rgba(201,80,63,.3);font-size:11px;color:#e79486;text-align:center">Remove all metadata</div>
+      <div style="padding:6px 9px;border-radius:6px;background:#232325;font-size:11px;color:#cfccc9;text-align:center">Reveal in Finder</div>
+    </div>
+  </div>
+
+  <!-- status bar -->
+  <div style="height:26px;flex:none;background:#101011;border-top:1px solid #000;display:flex;align-items:center;gap:14px;padding:0 12px;font-size:10.5px;color:#6e6b68;font-family:'Geist Mono',ui-monospace,monospace">
+    <span>1284 items · 3 selected · 12.6 GB</span>
+    <span>2 groups</span>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:6px"><span style="width:5px;height:5px;border-radius:50%;background:#7ac47a"></span>live · indexed 8214 files</span>
+    <span>⌘/ shortcuts</span>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ============ 1c : FIT-WIDTH VIEW ============ -->
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>State — image selected, fit-width in the same tab (direction <a class="dv-oid" href="#1a">1a</a>).</div>
+<div class="dv-card" style="width:1440px">
+<div style="width:1440px;height:900px;background:#131314;color:#e6e4e2;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <div style="height:40px;flex:none;display:flex;align-items:center;gap:14px;padding:0 12px;background:linear-gradient(#232326,#1b1b1d);border-bottom:1px solid #0c0c0d">
+    <div style="display:flex;gap:8px"><div style="width:11px;height:11px;border-radius:50%;background:#ec6a5e"></div><div style="width:11px;height:11px;border-radius:50%;background:#f4bf4f"></div><div style="width:11px;height:11px;border-radius:50%;background:#61c454"></div></div>
+    <div style="display:flex;align-items:center;gap:7px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 8c0-2.2.9-3.6 1.9-3.6.9 0 1.6 1 1.9 2.4h8.4c.3-1.4 1-2.4 1.9-2.4C19.1 4.4 20 5.8 20 8v3.4c0 4.3-3.4 7.6-8 7.6s-8-3.3-8-7.6V8z" fill="#c9a24d"/><circle cx="9.4" cy="11.2" r="1.05" fill="#131314"/><circle cx="14.6" cy="11.2" r="1.05" fill="#131314"/><path d="M12 13.4c-.8 0-1.5.5-1.5 1.1s.7 1.1 1.5 1.1 1.5-.5 1.5-1.1-.7-1.1-1.5-1.1z" fill="#2a2a2a"/></svg><span style="font-size:12px;font-weight:600;color:#b9b6b2">Retriever</span></div>
+    <div style="display:flex;align-items:flex-end;gap:2px;flex:1">
+      <div style="height:30px;padding:0 12px;display:flex;align-items:center;gap:8px;background:#131314;border:1px solid #0c0c0d;border-bottom-color:#131314;border-radius:7px 7px 0 0;font-size:12px;color:#f0eeec">2026 Selects — kestrel_0114.jpg<span style="color:#6d6a67">×</span></div>
+      <div style="height:28px;padding:0 12px;display:flex;align-items:center;background:#1f1f21;border-radius:7px 7px 0 0;font-size:12px;color:#9c9895">Client — Kestrel</div>
+    </div>
+    <span style="font-size:11px;color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">watching 3 folders</span>
+  </div>
+
+  <div style="height:44px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px;background:#191919;border-bottom:1px solid #0c0c0d;font-size:11.5px;color:#cfccc9">
+    <div style="height:26px;padding:0 9px;display:flex;align-items:center;gap:8px;white-space:nowrap;flex:none;border-radius:6px;background:#232325">← Back to grid <span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">esc</span></div>
+    <div style="width:1px;height:20px;background:#2a2a2c"></div>
+    <div style="height:26px;padding:0 9px;display:flex;align-items:center;white-space:nowrap;flex:none;border-radius:6px;background:rgba(230,180,34,.15);border:1px solid rgba(230,180,34,.32);color:#f0cf72">Fit width</div>
+    <div style="height:26px;padding:0 9px;display:flex;align-items:center;border-radius:6px;background:#232325">Fit screen</div>
+    <div style="height:26px;padding:0 9px;display:flex;align-items:center;border-radius:6px;background:#232325">100%</div>
+    <div style="height:26px;padding:0 9px;display:flex;align-items:center;gap:8px;border-radius:6px;background:#232325">↺ Rotate ↻</div>
+    <div style="height:26px;padding:0 9px;display:flex;align-items:center;border-radius:6px;background:#232325">Tag ▾</div>
+    <div style="height:26px;padding:0 9px;display:flex;align-items:center;border-radius:6px;background:#232325">Open in Photoshop</div>
+    <div style="flex:1"></div>
+    <span style="font-family:'Geist Mono',ui-monospace,monospace;color:#8f8c89">614 / 1284</span>
+    <div style="display:flex;gap:2px"><div style="width:26px;height:26px;display:grid;place-items:center;border-radius:6px;background:#232325">‹</div><div style="width:26px;height:26px;display:grid;place-items:center;border-radius:6px;background:#232325">›</div></div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:236px;flex:none;background:#171718;border-right:1px solid #0c0c0d;padding:12px 6px;font-size:12px;display:flex;flex-direction:column;gap:1px">
+      <div style="padding:0 8px 8px;font-size:10px;letter-spacing:.9px;text-transform:uppercase;color:#5f5c5a">Places</div>
+      <div style="padding:5px 8px;border-radius:5px;color:#c6c3c0">▾ Pictures</div>
+      <div style="padding:5px 8px 5px 22px;border-radius:5px;color:#c6c3c0">▾ 2026</div>
+      <div style="padding:5px 8px 5px 38px;border-radius:5px;background:rgba(230,180,34,.15);border:1px solid rgba(230,180,34,.3);color:#f9edc9;display:flex">Selects<span style="margin-left:auto;color:#e6b422;font-size:10px">1284</span></div>
+      <div style="padding:5px 8px 5px 38px;border-radius:5px;color:#a5a29f">Rejects</div>
+      <div style="padding:5px 8px 5px 38px;border-radius:5px;color:#a5a29f">Scans</div>
+      <div style="padding:5px 8px 5px 22px;border-radius:5px;color:#a5a29f">▸ 2025</div>
+      <div style="margin-top:auto;padding:9px 8px 0;border-top:1px solid #232325;font-size:10.5px;color:#5f5c5a;font-family:'Geist Mono',ui-monospace,monospace;line-height:1.6"><div>fsevents · 1.2s ago</div><div style="color:#7ac47a">no changes</div></div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#0d0d0e">
+      <div style="flex:1;min-height:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:22px">
+        <img src="photos/p01.png" alt="" style="max-width:760px;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;box-shadow:0 20px 60px -20px rgba(0,0,0,.9)" />
+      </div>
+      <div style="height:96px;flex:none;background:#141415;border-top:1px solid #1f1f21;display:flex;align-items:center;gap:10px;padding:0 12px;overflow:hidden">
+        <sc-for list="{{ strip }}" as="it" hint-placeholder-count="9">
+          <div style="height:70px;width:96px;flex:none;border-radius:3px;background:#0f0f10;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:2px;border:1px solid #232325">
+            <div style="width:100%;height:100%;background-repeat:no-repeat;background-position:center;background-size:contain;background-image:url({{ it.src }})"></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:112px;flex:none;background:#171718;border-top:1px solid #0c0c0d;display:flex;align-items:center;padding:0 16px;gap:24px">
+    <div style="display:flex;flex-direction:column;gap:6px;min-width:250px">
+      <div style="font-size:13px;font-weight:600;color:#f0eeec;font-family:'Geist Mono',ui-monospace,monospace">kestrel_0114.jpg</div>
+      <div style="font-size:10.5px;color:#6e6b68;font-family:'Geist Mono',ui-monospace,monospace">~/Pictures/2026/Selects</div>
+      <div style="display:flex;gap:5px"><span style="padding:2px 8px;border-radius:11px;font-size:10.5px;background:rgba(74,157,95,.18);color:#8fd0a2">select</span><span style="padding:2px 8px;border-radius:11px;font-size:10.5px;background:rgba(230,180,34,.15);color:#f0cf72">published</span></div>
+    </div>
+    <div style="flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:8px 22px;font-size:11px;font-family:'Geist Mono',ui-monospace,monospace">
+      <div><div style="color:#63605e;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px">dimensions</div><div style="color:#dedbd8">4032 × 3024</div></div>
+      <div><div style="color:#63605e;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px">color space</div><div style="color:#dedbd8">Display P3</div></div>
+      <div><div style="color:#63605e;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px">size</div><div style="color:#dedbd8">6.4 MB · JPEG</div></div>
+      <div><div style="color:#63605e;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px">group</div><div style="color:#f0cf72">window_seq (5)</div></div>
+      <div><div style="color:#63605e;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px">camera</div><div style="color:#dedbd8">Leica Q3 · 28 mm</div></div>
+      <div><div style="color:#63605e;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px">exposure</div><div style="color:#dedbd8">1/250 · f/2.8 · ISO 400</div></div>
+      <div><div style="color:#63605e;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px">modified</div><div style="color:#dedbd8">Aug 19, 14:02</div></div>
+      <div><div style="color:#63605e;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px">orientation</div><div style="color:#dedbd8">rotated 90° cw</div></div>
+    </div>
+  </div>
+  <div style="height:26px;flex:none;background:#101011;display:flex;align-items:center;gap:14px;padding:0 12px;font-size:10.5px;color:#6e6b68;font-family:'Geist Mono',ui-monospace,monospace"><span>614 of 1284</span><span style="margin-left:auto;display:flex;align-items:center;gap:6px"><span style="width:5px;height:5px;border-radius:50%;background:#7ac47a"></span>live</span><span>⌘/ shortcuts</span></div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: “build the filter panel and mass-rename dialog” · “add the keyboard shortcuts sheet” · “show the multi-select and metadata-cleanup states”</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const N = n => `photos/p${String(n).padStart(2,'0')}.png`;
+const NAMES = ['kestrel_0118.jpg','kestrel_0121.jpg','dune_edge_02.tif','harbour_rain.jpg','crowd_blur_7.jpg','aerial_map.webp','wall_night.png','surf_grain.jpg','tower_birds.jpg','yard_08.jpg','doorway_04.png','pavement_11.jpg','tokyo_bridge.jpg','block_window.tif','bus_light.jpg','fish_net.png','frame_test.jpg','azeri_room.png'];
+
+class Component extends DCLogic {
+  renderVals() {
+    const pick = (ns, off) => ns.map((n, i) => ({ src: N(n), name: NAMES[(n + off) % NAMES.length] }));
+    return {
+      gridA: pick([2,3,5,6,7,8,9,10,11,13], 0),
+      gridA2: pick([15,16,17,18], 3),
+      groupA: pick([6,7,8,9,10], 5),
+      strip: pick([2,3,4,5,6,7,8,9,10], 2),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<!-- 'unsafe-eval' is required because Vue's runtime template compiler (vue.global.js) uses
+     new Function() to turn template strings into render functions. Everything this app loads
+     is local (file:), so this doesn't expose remote-script risk the way it would on the web. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' file: data:; script-src 'self' file: 'unsafe-eval'; connect-src 'self'">
+<title>Retriever</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="../../node_modules/vue/dist/vue.global.prod.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

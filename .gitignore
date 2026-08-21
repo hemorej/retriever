@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# local catalog db (lives in Electron's userData dir at runtime, but
+# ignore it here too in case anything ever writes one into the repo)
+*.sqlite3
+*.sqlite3-*
+
+# OS cruft
+.DS_Store
+
+# logs
+npm-debug.log*
+*.log
+
+# editors
+.vscode/
+.idea/
+
+# packaged app output (electron-builder / electron-packager, if added later)
+dist/
+out/
+build/
+
+# env / local secrets
+.env
+.env.local
+
+# scratch driver scripts used for manual/agent testing — never commit these
+.tmp-*.js
