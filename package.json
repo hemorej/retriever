@@ -15,7 +15,7 @@
     "vue": "^3.5.41"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.1",
+    "@electron/rebuild": "^4.2.0",
     "electron": "^32.0.0"
   },
   "allowScripts": {
