@@ -16,6 +16,7 @@
   function stripExt(p) { const b = basename(p); const i = b.lastIndexOf('.'); return i <= 0 ? b : b.slice(0, i); }
   function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 9); }
   function fileUrl(p) { return 'file://' + p.split('/').map(encodeURIComponent).join('/'); }
+  function isTiffPath(p) { return /\.tiff?$/i.test(p); }
   function fmtBytes(n) {
     if (n == null) return '—';
     if (n < 1024) return n + ' B';
@@ -444,6 +445,7 @@
         folderFilter: null,
         expandedFolders: reactive(new Set()),
         subfoldersCache: reactive(new Map()),
+        imagePreviews: reactive(new Map()),
         viewMode: 'grid',
         thumbSize: 140,
         search: '',
@@ -1001,6 +1003,26 @@
       }
       const subfolderEntries = computed(() => (state.folderFilter && state.subfoldersCache.get(state.folderFilter)) || []);
 
+      // TIFF can't be decoded by Chromium's <img> tag, so those need a
+      // pre-rendered preview from main (see get-image-preview); everything
+      // else still loads straight from disk via fileUrl().
+      async function loadImagePreview(p) {
+        if (state.imagePreviews.has(p)) return;
+        state.imagePreviews.set(p, null); // in-flight marker
+        try {
+          state.imagePreviews.set(p, await window.retriever.getImagePreview(p));
+        } catch {
+          state.imagePreviews.set(p, '');
+        }
+      }
+      function previewSrc(p) {
+        if (!p || !isTiffPath(p)) return fileUrl(p);
+        const cached = state.imagePreviews.get(p);
+        if (cached) return cached;
+        if (cached === undefined) loadImagePreview(p);
+        return '';
+      }
+
       // ---------- undo ----------
       async function undo() {
         const action = state.undoStack.pop();
@@ -1140,7 +1162,7 @@
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
         openFileContextMenu, handleContextAction,
         openViewer, backToGrid, stepViewer, ensureFileInfo,
-        selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders,
+        selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders, previewSrc,
         undo, onSliderPointerDown, toast, onImageLoad,
       };
     },
@@ -1338,7 +1360,7 @@
                        @click="onTileClick($event, entry.file.path)" @dblclick="openViewer(entry.file.path)"
                        @contextmenu="openFileContextMenu($event, entry.file.path)">
                     <div class="tile-thumb">
-                      <img loading="lazy" :src="fileUrl(entry.file.path)" :style="{ transform: 'rotate(' + (state.rotations[entry.file.path] || 0) + 'deg)' }" />
+                      <img loading="lazy" :src="previewSrc(entry.file.path)" :style="{ transform: 'rotate(' + (state.rotations[entry.file.path] || 0) + 'deg)' }" />
                     </div>
                     <div v-if="state.inlineRenamePath === entry.file.path" class="tile-rename" @click.stop>
                       <input v-model="state.inlineRenameValue" @keydown.enter="commitInlineRename" @keydown.esc="cancelInlineRename" @blur="commitInlineRename" autofocus />
@@ -1354,7 +1376,7 @@
                     <div class="tile-stack">
                       <div class="layer layer1"></div>
                       <div class="layer layer2"></div>
-                      <div class="front"><img v-if="entry.cover" :src="fileUrl(entry.cover.path)" /></div>
+                      <div class="front"><img v-if="entry.cover" :src="previewSrc(entry.cover.path)" /></div>
                       <div class="stack-pill" @click.stop="toggleExpand(entry.group.id)">▸ {{ entry.group.memberPaths.length }}</div>
                     </div>
                     <div class="tile-group-name">{{ entry.group.name }} ⌗</div>
@@ -1379,7 +1401,7 @@
                     <template v-for="p in g.memberPaths" :key="p">
                       <div v-if="state.files.get(p)" class="tile"
                            :class="{ selected: state.selection.includes(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
-                        <div class="tile-thumb"><img :src="fileUrl(p)" /></div>
+                        <div class="tile-thumb"><img :src="previewSrc(p)" /></div>
                         <div class="tile-name"><span class="fname">{{ state.files.get(p).name }}</span></div>
                       </div>
                     </template>
@@ -1403,7 +1425,7 @@
 
         <!-- info strip -->
         <div class="info-strip" v-if="activeFile">
-          <div class="info-thumb"><img :src="fileUrl(activeFile.path)" @load="onImageLoad(activeFile, $event)" /></div>
+          <div class="info-thumb"><img :src="previewSrc(activeFile.path)" @load="onImageLoad(activeFile, $event)" /></div>
           <div class="info-main">
             <div class="info-head">
               <span class="info-name">{{ activeFile.name }}</span>
@@ -1488,11 +1510,11 @@
           <template v-else-if="activeFile">
             <div class="viewer-body">
               <div class="viewer-stage">
-                <img :src="fileUrl(activeFile.path)" :style="{ transform: 'rotate(' + (state.rotations[activeFile.path] || 0) + 'deg)' }" @load="onImageLoad(activeFile, $event)" />
+                <img :src="previewSrc(activeFile.path)" :style="{ transform: 'rotate(' + (state.rotations[activeFile.path] || 0) + 'deg)' }" @load="onImageLoad(activeFile, $event)" />
               </div>
               <div class="filmstrip">
                 <div class="filmstrip-cell" v-for="p in navOrder" :key="p" :class="{ current: p === activePath }" @click="selectSingle(p)">
-                  <img v-if="state.files.get(p)" :src="fileUrl(p)" />
+                  <img v-if="state.files.get(p)" :src="previewSrc(p)" />
                 </div>
               </div>
             </div>

@@ -22,6 +22,7 @@ let watcher;
 let watchedRoot;
 
 const EXTERNAL_EDITOR_APP = '/Applications/Affinity Photo 2.app';
+const PREVIEW_MAX_DIMENSION = 2000;
 
 // Same "-2, -3, …" collision scheme as duplicate-file, generalized to an
 // arbitrary destination directory (move/copy land files there, possibly
@@ -261,6 +262,25 @@ app.whenReady().then(() => {
         .sort((a, b) => a.name.localeCompare(b.name));
     } catch {
       return [];
+    }
+  });
+
+  // Chromium's <img> can't decode TIFF at all, and neither can Electron's
+  // nativeImage (verified: it returns an empty image even for a
+  // sips-produced, well-formed TIFF) — so those files need a pre-rendered
+  // preview. Shelling out to macOS's built-in `sips` converts (and, via
+  // -Z, downsamples) to PNG in one call, with no new dependency. Everything
+  // else still loads straight from disk via file:// (see fileUrl in app.js).
+  ipcMain.handle('get-image-preview', async (_event, filePath) => {
+    const tmpPath = path.join(os.tmpdir(), `retriever-preview-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
+    try {
+      await new Promise((resolve, reject) => {
+        execFile('sips', ['-s', 'format', 'png', '-Z', String(PREVIEW_MAX_DIMENSION), filePath, '--out', tmpPath], (err) => (err ? reject(err) : resolve()));
+      });
+      const buf = await fs.promises.readFile(tmpPath);
+      return `data:image/png;base64,${buf.toString('base64')}`;
+    } finally {
+      fs.promises.unlink(tmpPath).catch(() => {});
     }
   });
 });

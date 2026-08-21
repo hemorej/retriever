@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('retriever', {
   stripMetadata: (filePaths, options) => ipcRenderer.invoke('strip-metadata', { filePaths, options }),
   openInExternalEditor: (filePath) => ipcRenderer.invoke('open-in-external-editor', filePath),
   listSubfolders: (dir) => ipcRenderer.invoke('list-subfolders', dir),
+  getImagePreview: (filePath) => ipcRenderer.invoke('get-image-preview', filePath),
   onFsEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('fs-event', listener);
