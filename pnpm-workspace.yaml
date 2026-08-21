@@ -1,0 +1,16 @@
+allowBuilds:
+  better-sqlite3: true
+  electron: true
+  '@electron/rebuild': true
+  fsevents: true
+
+# Supply-chain safety net: refuse to resolve/install package versions
+# published more recently than this window. Malicious or compromised
+# releases are typically caught and pulled from the registry within
+# hours to a couple of days, so this buys that detection window before
+# a bad version can land in our lockfile. 4320 minutes = 3 days.
+minimumReleaseAge: 4320
+# Exceptions for packages where we need to react fast (e.g. security
+# patches you've manually verified): add the package name here.
+# minimumReleaseAgeExclude:
+#   - some-package
