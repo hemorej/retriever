@@ -7,7 +7,8 @@
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "start": "electron .",
-    "postinstall": "electron-rebuild -f -w better-sqlite3"
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "dist": "electron-builder --mac --dir"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
@@ -17,6 +18,25 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
-    "electron": "^43.4.0"
+    "electron": "^43.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.retriever.app",
+    "productName": "Retriever",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "!design_handoff_retriever/**/*"
+    ],
+    "mac": {
+      "icon": "src/renderer/icon.png",
+      "category": "public.app-category.graphics-design",
+      "target": "dir"
+    }
   }
 }
