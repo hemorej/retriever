@@ -5,9 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm install   # also runs postinstall: electron-rebuild -f -w better-sqlite3
-npm start     # launches the app (electron .)
+pnpm install   # also runs postinstall: electron-rebuild -f -w better-sqlite3
+pnpm start     # launches the app (electron .)
 ```
+
+Package management is pnpm, not npm — `pnpm-lock.yaml` is the lockfile,
+`pnpm-workspace.yaml` holds the `allowBuilds` allowlist (which packages may
+run postinstall/build scripts; add a new native dependency here or its
+install silently no-ops) and a `minimumReleaseAge` supply-chain safety net
+(new package versions aren't installable until they've been out a few days).
 
 There is no build step, bundler, lint script, or test suite configured.
 The renderer is loaded as plain files (`src/renderer/index.html` script-tags
@@ -18,11 +24,14 @@ To sanity-check a change without opening a window, `node --check <file>`
 catches syntax errors in any of the `src/**/*.js` files.
 
 There's no headless test harness. To actually exercise the UI, drive the
-app with Playwright's `_electron` support (`npm install --no-save
-playwright-core`, launch `node_modules/electron/dist/Electron.app/.../Electron`
-against the repo root, screenshot via `page.screenshot()`) — see git history
-of this session for a working pattern. Always `npm uninstall playwright-core`
-afterward; it's a manual verification tool, not a project dependency.
+app with Playwright's `_electron` support. `npm install --no-save
+playwright-core` doesn't work cleanly against pnpm's node_modules layout
+(ERESOLVE crash) — instead `npm init -y && npm install playwright-core` in a
+scratch directory outside the repo, then a script there can still launch
+`<repo>/node_modules/electron/dist/Electron.app/.../Electron` against the
+repo root and screenshot via `page.screenshot()`; see git history of this
+session for a working pattern. It's a manual verification tool, not a
+project dependency — never add it to this repo's package.json.
 
 ## Architecture
 
