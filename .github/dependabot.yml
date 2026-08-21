@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Dependabot uses the "npm" ecosystem for pnpm projects too
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
