@@ -49,11 +49,14 @@
   // ---------- small shared components ----------
   const AppMark = {
     props: { size: { type: Number, default: 18 }, fill: { type: String, default: '#c9a24d' } },
-    template: `<svg :width="size" :height="size" viewBox="0 0 24 24" fill="none">
-      <path d="M4 8c0-2.2.9-3.6 1.9-3.6.9 0 1.6 1 1.9 2.4h8.4c.3-1.4 1-2.4 1.9-2.4C19.1 4.4 20 5.8 20 8v3.4c0 4.3-3.4 7.6-8 7.6s-8-3.3-8-7.6V8z" :fill="fill"/>
-      <circle cx="9.4" cy="11.2" r="1.05" fill="#131314"/><circle cx="14.6" cy="11.2" r="1.05" fill="#131314"/>
-      <path d="M12 13.4c-.8 0-1.5.5-1.5 1.1s.7 1.1 1.5 1.1 1.5-.5 1.5-1.1-.7-1.1-1.5-1.1z" fill="#2a2a2a"/>
-    </svg>`,
+    template: `<span :style="{
+      display: 'inline-block', width: size + 'px', height: size + 'px', flex: 'none',
+      backgroundColor: fill,
+      WebkitMaskImage: 'url(./icon.png)', maskImage: 'url(./icon.png)',
+      WebkitMaskSize: 'contain', maskSize: 'contain',
+      WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat',
+      WebkitMaskPosition: 'center', maskPosition: 'center',
+    }"></span>`,
   };
 
   const Toast = {

@@ -19,6 +19,8 @@ let database;
 let watcher;
 let watchedRoot;
 
+const iconPath = path.join(__dirname, '../renderer/icon.png');
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -26,6 +28,7 @@ function createWindow() {
     minWidth: 860,
     minHeight: 560,
     backgroundColor: '#131314',
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -52,6 +55,9 @@ function startWatching(rootDir) {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(iconPath);
+  }
   database = db.openDb(app.getPath('userData'));
   createWindow();
 
