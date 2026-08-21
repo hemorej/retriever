@@ -16,6 +16,10 @@ const { stripBuffer } = require('./metadata');
 // HTTP disk cache to grow unbounded on disk.
 app.commandLine.appendSwitch('disk-cache-size', String(50 * 1024 * 1024));
 
+// electron-builder's productName ("Retriever") only applies to packaged
+// builds; `electron .` in dev otherwise shows "Electron" in the menu bar.
+app.setName('Retriever');
+
 let mainWindow;
 let database;
 let watcher;
@@ -45,6 +49,13 @@ function uniqueDestPath(destDir, filePath) {
 const dockIconPath = path.join(__dirname, '../renderer/icon-dock.png');
 
 function createWindow() {
+  // In dev (`electron .`), the Dock/app-switcher icon otherwise defaults to
+  // Electron's own icon — packaged builds get this from electron-builder's
+  // `mac.icon` instead, but that config has no effect on unpackaged runs.
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(dockIconPath);
+  }
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
