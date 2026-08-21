@@ -247,6 +247,22 @@ app.whenReady().then(() => {
     const err = await shell.openPath(filePath);
     if (err) throw new Error(err);
   });
+
+  // Lists a directory's immediate subdirectories, independent of the
+  // image-only fs watcher — used to drive the folder tree's expand
+  // affordance and the grid's subfolder tiles, which need to reflect real
+  // filesystem structure even where there are no (tracked) images.
+  ipcMain.handle('list-subfolders', async (_event, dir) => {
+    try {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      return entries
+        .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+        .map((e) => ({ name: e.name, path: path.join(dir, e.name) }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      return [];
+    }
+  });
 });
 
 app.on('window-all-closed', () => {

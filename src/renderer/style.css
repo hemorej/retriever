@@ -157,6 +157,7 @@ body {
 }
 .tree-row:hover { background: #1c1c1e; }
 .tree-row .disclosure { width: 9px; flex: none; color: var(--text-dim); font-size: 10px; }
+.tree-row .subdir-dot { width: 6px; flex: none; text-align: center; color: var(--text-dim); font-size: 10px; margin-left: -3px; }
 .tree-row .name { overflow: hidden; text-overflow: ellipsis; }
 .tree-row .count { margin-left: auto; font-size: 10px; color: var(--text-label-2); font-family: var(--font-mono); flex: none; }
 .tree-row.current { background: var(--accent-tint); color: var(--accent-pale); border: 1px solid var(--accent-edge); }
@@ -183,6 +184,11 @@ body {
 .grid-sizer { width: 1px; height: 1px; visibility: hidden; }
 
 .tile { display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+
+.subfolder-row { display: flex; flex-wrap: wrap; gap: 16px 18px; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border-hairline); }
+.subfolder-tile { width: 140px; }
+.subfolder-tile .subfolder-icon { height: 72px; font-size: 20px; color: var(--text-dim); }
+.subfolder-tile:hover .tile-name { color: var(--text-primary); }
 .tile-thumb {
   height: var(--thumb-h, 140px); border-radius: 4px; background: var(--bg-well); box-sizing: border-box;
   display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 3px;

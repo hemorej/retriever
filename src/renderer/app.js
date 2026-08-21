@@ -71,22 +71,48 @@
 
   const TreeNode = {
     name: 'TreeNode',
-    props: { node: Object, depth: { type: Number, default: 0 }, activePath: String },
+    props: {
+      node: Object, depth: { type: Number, default: 0 }, activePath: String,
+      // subfolders: reactive Map(dirPath -> [{name, path}]), populated
+      // independently of the image-only fs watcher (see list-subfolders in
+      // main/index.js) — real filesystem structure, not just image-bearing
+      // folders, so empty/RAW/non-image subdirs still show up and expand.
+      subfolders: Object, expanded: Object, loadSubfolders: Function,
+    },
     emits: ['select'],
-    data() { return { open: this.depth < 2 }; },
     computed: {
-      childList() { return Array.from(this.node.children.values()).sort((a, b) => a.name.localeCompare(b.name)); },
+      open() { return this.expanded.has(this.node.path); },
+      childList() {
+        const byName = new Map();
+        for (const c of this.node.children.values()) byName.set(c.name, c);
+        const sub = this.subfolders.get(this.node.path);
+        if (sub) {
+          for (const s of sub) {
+            if (!byName.has(s.name)) byName.set(s.name, { name: s.name, path: s.path, children: new Map(), count: 0 });
+          }
+        }
+        return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+      },
+    },
+    created() {
+      this.loadSubfolders(this.node.path);
+      if (this.depth < 2) this.expanded.add(this.node.path);
+    },
+    methods: {
+      toggle() { this.expanded.has(this.node.path) ? this.expanded.delete(this.node.path) : this.expanded.add(this.node.path); },
     },
     template: `
       <div>
         <div class="tree-row" :class="{ current: node.path === activePath }" :style="{ paddingLeft: (8 + depth * 14) + 'px' }" @click="$emit('select', node.path)">
-          <span class="disclosure" v-if="childList.length" @click.stop="open = !open">{{ open ? '▾' : '▸' }}</span>
+          <span class="disclosure" v-if="childList.length" @click.stop="toggle">{{ open ? '▾' : '▸' }}</span>
           <span class="disclosure" v-else></span>
+          <span class="subdir-dot" v-if="childList.length">·</span>
           <span class="name">{{ node.name }}</span>
           <span class="count">{{ node.count }}</span>
         </div>
         <template v-if="open">
-          <tree-node v-for="c in childList" :key="c.path" :node="c" :depth="depth + 1" :active-path="activePath" @select="$emit('select', $event)"></tree-node>
+          <tree-node v-for="c in childList" :key="c.path" :node="c" :depth="depth + 1" :active-path="activePath"
+                     :subfolders="subfolders" :expanded="expanded" :load-subfolders="loadSubfolders" @select="$emit('select', $event)"></tree-node>
         </template>
       </div>`,
   };
@@ -416,6 +442,8 @@
         rotations: reactive({}),
         selection: [],
         folderFilter: null,
+        expandedFolders: reactive(new Set()),
+        subfoldersCache: reactive(new Map()),
         viewMode: 'grid',
         thumbSize: 140,
         search: '',
@@ -541,7 +569,8 @@
         state.groups = [];
         state.expandedGroups.clear();
         state.selection = [];
-        state.folderFilter = rootDir;
+        state.expandedFolders.clear();
+        state.subfoldersCache.clear();
         state.viewMode = 'grid';
         state.permissionDenied.active = false;
         state.indexing.active = true;
@@ -552,6 +581,7 @@
         tab.rootDir = rootDir;
         tab.watching = true;
         tab.label = basename(rootDir) || rootDir;
+        selectFolder(rootDir);
       }
 
       async function chooseFolder() {
@@ -701,12 +731,24 @@
       const activeFile = computed(() => (activePath.value ? state.files.get(activePath.value) : null));
       const activeGroupId = computed(() => (activePath.value ? groupMembership.value.get(activePath.value) : null));
 
+      const hasActiveFilters = computed(() => !!(
+        state.filters.tags.size || state.filters.types.size || state.search.trim()
+        || state.filters.untaggedOnly || state.filters.groupedOnly || state.filters.minRes || state.filters.maxRes || state.filters.hasGps
+      ));
+
       const systemState = computed(() => {
         if (!activeTab.value.watching) return 'no-folder';
         if (state.permissionDenied.active) return 'permission-denied';
         if (state.indexing.active) return 'indexing';
         if (state.files.size === 0) return 'no-photos';
-        if (sortedFiles.value.length === 0) return 'filtered-empty';
+        if (sortedFiles.value.length === 0) {
+          if (hasActiveFilters.value) return 'filtered-empty';
+          // Browsing into a folder whose photos all live in subfolders isn't
+          // a filter problem — show the subfolder tiles instead of implying
+          // something needs to be cleared.
+          if (subfolderEntries.value.length) return null;
+          return 'empty-folder';
+        }
         return null;
       });
 
@@ -929,7 +971,35 @@
         }
         return root;
       });
-      function selectFolder(p) { state.folderFilter = p; }
+      // Independent of the image-only fs watcher (see list-subfolders in
+      // main/index.js) — lets the tree show a "has subdirs" indicator and
+      // the grid show subfolder tiles even for folders with no (tracked)
+      // images of their own.
+      async function loadSubfolders(dir) {
+        if (state.subfoldersCache.has(dir)) return;
+        state.subfoldersCache.set(dir, null); // in-flight marker
+        try {
+          state.subfoldersCache.set(dir, await window.retriever.listSubfolders(dir));
+        } catch {
+          state.subfoldersCache.set(dir, []);
+        }
+      }
+      function selectFolder(p) {
+        state.folderFilter = p;
+        loadSubfolders(p);
+        // Auto-expand the selected folder and all of its ancestors so the
+        // tree reveals its subdirs immediately.
+        const root = activeTab.value.rootDir;
+        let cur = p;
+        while (cur && cur.length >= root.length) {
+          state.expandedFolders.add(cur);
+          if (cur === root) break;
+          const idx = cur.lastIndexOf('/');
+          if (idx <= 0) break;
+          cur = cur.slice(0, idx);
+        }
+      }
+      const subfolderEntries = computed(() => (state.folderFilter && state.subfoldersCache.get(state.folderFilter)) || []);
 
       // ---------- undo ----------
       async function undo() {
@@ -1070,7 +1140,7 @@
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
         openFileContextMenu, handleContextAction,
         openViewer, backToGrid, stepViewer, ensureFileInfo,
-        selectTab, addTab, closeTab, folderTree, selectFolder,
+        selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders,
         undo, onSliderPointerDown, toast, onImageLoad,
       };
     },
@@ -1136,7 +1206,8 @@
           <div class="tree">
             <div class="tree-label">Places</div>
             <div class="tree-rows" v-if="folderTree">
-              <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir" @select="selectFolder"></tree-node>
+              <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir"
+                         :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" @select="selectFolder"></tree-node>
             </div>
             <div class="tree-rows" v-else><div class="tree-row dim" style="cursor:default">no folder watched</div></div>
             <div class="tree-label">Tags</div>
@@ -1216,6 +1287,16 @@
               </div>
             </template>
 
+            <template v-else-if="systemState === 'empty-folder'">
+              <div class="state-pane">
+                <div class="state-caption">Folder has no photos</div>
+                <div class="state-body">
+                  <div class="state-title">Nothing directly in this folder</div>
+                  <div class="state-copy">No photos here — check the tree on the left for subfolders.</div>
+                </div>
+              </div>
+            </template>
+
             <template v-else-if="systemState === 'filtered-empty'">
               <div class="state-pane">
                 <div class="state-caption">Filtered to nothing</div>
@@ -1241,6 +1322,13 @@
                 <span class="filter-chip" v-for="t in state.filters.tags" :key="t">tag: {{ t }}</span>
                 <span class="filter-chip" v-for="ty in state.filters.types" :key="ty">type: {{ ty }}</span>
                 <span>· {{ sortedFiles.length }} of {{ allFiles.length }} shown</span>
+              </div>
+
+              <div class="subfolder-row" v-if="subfolderEntries.length">
+                <div class="tile subfolder-tile" v-for="f in subfolderEntries" :key="f.path" @click="selectFolder(f.path)">
+                  <div class="tile-thumb subfolder-icon">▸</div>
+                  <div class="tile-name"><span class="fname">{{ f.name }}</span></div>
+                </div>
               </div>
 
               <div class="tile-grid" :style="{ '--row-h': gridRowHeight + 'px' }">
@@ -1372,7 +1460,8 @@
           <div class="tree">
             <div class="tree-label">Places</div>
             <div class="tree-rows" v-if="folderTree">
-              <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir" @select="selectFolder"></tree-node>
+              <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir"
+                         :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" @select="selectFolder"></tree-node>
             </div>
             <div class="tree-receipt"><div>{{ state.receipt.line1 }}</div><div class="delta">{{ state.receipt.line2 }}</div></div>
           </div>
