@@ -35,7 +35,10 @@ function uniqueDestPath(destDir, filePath) {
   return candidate;
 }
 
-const iconPath = path.join(__dirname, '../renderer/icon.png');
+// Slightly transparent variant of the mark (src/renderer/icon.png, used
+// fully opaque by AppMark's CSS mask in the renderer) for the window/dock
+// icon.
+const dockIconPath = path.join(__dirname, '../renderer/icon-dock.png');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -44,7 +47,7 @@ function createWindow() {
     minWidth: 860,
     minHeight: 560,
     backgroundColor: '#131314',
-    icon: iconPath,
+    icon: dockIconPath,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -72,7 +75,7 @@ function startWatching(rootDir) {
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin' && app.dock) {
-    app.dock.setIcon(iconPath);
+    app.dock.setIcon(dockIconPath);
   }
   database = db.openDb(app.getPath('userData'));
   createWindow();
