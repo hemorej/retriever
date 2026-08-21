@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
-    "electron": "^32.0.0"
+    "electron": "^39.8.10"
   },
   "allowScripts": {
     "better-sqlite3@11.10.0": true,
