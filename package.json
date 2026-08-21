@@ -9,7 +9,7 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^13.0.3",
     "chokidar": "^3.6.0",
     "hash-wasm": "^4.11.0",
     "vue": "^3.5.41"
