@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('retriever', {
   openPrivacySettings: () => ipcRenderer.invoke('open-privacy-settings'),
   openFolder: (filePath) => ipcRenderer.invoke('open-folder', filePath),
   renameFile: (filePath, newName) => ipcRenderer.invoke('rename-file', { filePath, newName }),
+  trashPath: (targetPath) => ipcRenderer.invoke('trash-path', targetPath),
   duplicateFile: (filePath) => ipcRenderer.invoke('duplicate-file', filePath),
   chooseDestinationFolder: () => ipcRenderer.invoke('choose-destination-folder'),
   moveFiles: (filePaths, destDir) => ipcRenderer.invoke('move-files', { filePaths, destDir }),

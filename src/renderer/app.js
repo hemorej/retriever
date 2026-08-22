@@ -81,7 +81,7 @@
       subfolders: Object, expanded: Object, loadSubfolders: Function,
       autoExpandDepth: { type: Number, default: 2 }, persistExpansion: Function,
     },
-    emits: ['select'],
+    emits: ['select', 'contextmenu'],
     computed: {
       open() { return this.expanded.has(this.node.path); },
       childList() {
@@ -108,7 +108,8 @@
     },
     template: `
       <div>
-        <div class="tree-row" :class="{ current: node.path === activePath }" :style="{ paddingLeft: (8 + depth * 14) + 'px' }" @click="$emit('select', node.path)">
+        <div class="tree-row" :class="{ current: node.path === activePath }" :style="{ paddingLeft: (8 + depth * 14) + 'px' }"
+             @click="$emit('select', node.path)" @contextmenu.prevent="$emit('contextmenu', $event, node.path)">
           <span class="disclosure" v-if="childList.length" @click.stop="toggle">{{ open ? '▾' : '▸' }}</span>
           <span class="disclosure" v-else></span>
           <span class="subdir-dot" v-if="childList.length">·</span>
@@ -118,7 +119,8 @@
         <template v-if="open">
           <tree-node v-for="c in childList" :key="c.path" :node="c" :depth="depth + 1" :active-path="activePath"
                      :subfolders="subfolders" :expanded="expanded" :load-subfolders="loadSubfolders" :auto-expand-depth="autoExpandDepth"
-                     :persist-expansion="persistExpansion" @select="$emit('select', $event)"></tree-node>
+                     :persist-expansion="persistExpansion" @select="$emit('select', $event)"
+                     @contextmenu="(e, p) => $emit('contextmenu', e, p)"></tree-node>
         </template>
       </div>`,
   };
@@ -141,6 +143,67 @@
         <div class="item" @click="$emit('action', 'strip-metadata')"><span>Remove all metadata</span></div>
         <div class="sep"></div>
         <div class="item" @click="$emit('action', 'reveal')"><span>Reveal in Finder</span></div>
+      </div>`,
+  };
+
+  const FolderContextMenu = {
+    props: { x: Number, y: Number, isRoot: Boolean },
+    emits: ['action', 'close'],
+    template: `
+      <div class="context-menu" :style="{ left: x + 'px', top: y + 'px', width: '190px' }" @click.stop @contextmenu.prevent>
+        <div class="item primary" @click="$emit('action', 'open-new-tab')"><span>Open in New Tab</span></div>
+        <div class="sep"></div>
+        <div class="item" :class="{ disabled: isRoot }" @click="$emit('action', 'rename')"><span>Rename…</span></div>
+        <div class="item" :class="{ disabled: isRoot }" @click="$emit('action', 'delete')"><span>Delete…</span></div>
+      </div>`,
+  };
+
+  const RenameDialog = {
+    props: { title: String, value: String },
+    emits: ['close', 'rename'],
+    data() { return { name: this.value }; },
+    mounted() { this.$refs.input.focus(); this.$refs.input.select(); },
+    template: `
+      <div class="overlay" @mousedown.self="$emit('close')">
+        <div class="dialog" style="width:380px">
+          <div class="dialog-head">
+            <span class="title">{{ title }}</span>
+            <span class="close" @click="$emit('close')">×</span>
+          </div>
+          <div class="dialog-body">
+            <input ref="input" class="res-field" style="width:100%;box-sizing:border-box" v-model="name"
+                   @keydown.enter="$emit('rename', name)" @keydown.esc="$emit('close')" />
+          </div>
+          <div class="dialog-footer">
+            <div class="actions">
+              <div class="btn ghost" @click="$emit('close')">Cancel</div>
+              <div class="btn accent" @click="$emit('rename', name)">Rename</div>
+            </div>
+          </div>
+        </div>
+      </div>`,
+  };
+
+  const ConfirmDialog = {
+    props: { title: String, message: String, confirmLabel: { type: String, default: 'Confirm' } },
+    emits: ['close', 'confirm'],
+    template: `
+      <div class="overlay" @mousedown.self="$emit('close')">
+        <div class="dialog" style="width:380px">
+          <div class="dialog-head">
+            <span class="title">{{ title }}</span>
+            <span class="close" @click="$emit('close')">×</span>
+          </div>
+          <div class="dialog-body">
+            <div class="md-kept-note">{{ message }}</div>
+          </div>
+          <div class="dialog-footer">
+            <div class="actions">
+              <div class="btn ghost" @click="$emit('close')">Cancel</div>
+              <div class="btn danger" @click="$emit('confirm')">{{ confirmLabel }}</div>
+            </div>
+          </div>
+        </div>
       </div>`,
   };
 
@@ -437,7 +500,7 @@
 
   // ---------- root app ----------
   const App = {
-    components: { AppMark, Toast, ContextMenu, TagMenu, FilterPanel, MassRenameDialog, CleanupDialog, ShortcutsSheet },
+    components: { AppMark, Toast, ContextMenu, FolderContextMenu, RenameDialog, ConfirmDialog, TagMenu, FilterPanel, MassRenameDialog, CleanupDialog, ShortcutsSheet },
     setup() {
       const state = reactive({
         tabs: [{ id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', expandedFolders: null }],
@@ -464,6 +527,9 @@
           minRes: '', maxRes: '', groupedOnly: false, hasGps: false, untaggedOnly: false, includeSubfolders: false,
         }),
         contextMenu: reactive({ open: false, x: 0, y: 0, targetPath: null, isGroup: false, groupId: null }),
+        folderContextMenu: reactive({ open: false, x: 0, y: 0, targetPath: null }),
+        folderRenameDialog: reactive({ open: false, path: null }),
+        folderDeleteDialog: reactive({ open: false, path: null }),
         tagMenu: reactive({ open: false, x: 0, y: 0 }),
         renameDialogOpen: false,
         cleanupDialogOpen: false,
@@ -967,6 +1033,58 @@
         }
       }
 
+      // ---------- tree folder context menu ----------
+      function openFolderContextMenu(e, p) {
+        e.preventDefault();
+        state.folderContextMenu.open = true;
+        state.folderContextMenu.x = Math.min(e.clientX, window.innerWidth - 202);
+        state.folderContextMenu.y = Math.min(e.clientY, window.innerHeight - 120);
+        state.folderContextMenu.targetPath = p;
+      }
+      async function openFolderInNewTab(dir) {
+        addTab();
+        await window.retriever.watchFolder(dir);
+        await beginWatch(dir);
+      }
+      function handleFolderContextAction(action) {
+        const p = state.folderContextMenu.targetPath;
+        const isRoot = p === activeTab.value.rootDir;
+        state.folderContextMenu.open = false;
+        switch (action) {
+          case 'open-new-tab': openFolderInNewTab(p); break;
+          case 'rename':
+            if (isRoot) return;
+            state.folderRenameDialog.path = p;
+            state.folderRenameDialog.open = true;
+            break;
+          case 'delete':
+            if (isRoot) return;
+            state.folderDeleteDialog.path = p;
+            state.folderDeleteDialog.open = true;
+            break;
+        }
+      }
+      async function commitFolderRename(newName) {
+        const p = state.folderRenameDialog.path;
+        state.folderRenameDialog.open = false;
+        const trimmed = (newName || '').trim();
+        if (!p || !trimmed || trimmed === basename(p)) return;
+        try {
+          await window.retriever.renameFile(p, trimmed);
+          toast(`Renamed to "${trimmed}"`);
+        } catch (e) { toast(e.message); }
+      }
+      async function commitFolderDelete() {
+        const p = state.folderDeleteDialog.path;
+        state.folderDeleteDialog.open = false;
+        if (!p) return;
+        try {
+          await window.retriever.trashPath(p);
+          toast(`Moved "${basename(p)}" to Trash`);
+          if (state.folderFilter === p || state.folderFilter.startsWith(p + '/')) selectFolder(activeTab.value.rootDir);
+        } catch (e) { toast(e.message); }
+      }
+
       // ---------- viewer ----------
       function openViewer(p) { selectSingle(p); state.viewMode = 'viewer'; state.comparePaths.length = 0; }
       function backToGrid() { state.viewMode = 'grid'; state.comparePaths.length = 0; }
@@ -1251,6 +1369,9 @@
         if (e.key === 'Escape') {
           if (state.shortcutsHeld) state.shortcutsHeld = false;
           else if (state.contextMenu.open) state.contextMenu.open = false;
+          else if (state.folderContextMenu.open) state.folderContextMenu.open = false;
+          else if (state.folderRenameDialog.open) state.folderRenameDialog.open = false;
+          else if (state.folderDeleteDialog.open) state.folderDeleteDialog.open = false;
           else if (state.tagMenu.open) state.tagMenu.open = false;
           else if (state.renameDialogOpen) state.renameDialogOpen = false;
           else if (state.cleanupDialogOpen) state.cleanupDialogOpen = false;
@@ -1316,7 +1437,7 @@
       onMounted(() => {
         window.addEventListener('keydown', onKeydown);
         window.addEventListener('keyup', onKeyup);
-        window.addEventListener('click', () => { state.contextMenu.open = false; state.tagMenu.open = false; });
+        window.addEventListener('click', () => { state.contextMenu.open = false; state.tagMenu.open = false; state.folderContextMenu.open = false; });
 
         // .grid-area only exists in the DOM while state.viewMode === 'grid' —
         // its template ref goes null across a grid<->viewer switch, so the
@@ -1367,6 +1488,7 @@
         duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, revealInFinder,
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
         openFileContextMenu, handleContextAction,
+        openFolderContextMenu, handleFolderContextAction, commitFolderRename, commitFolderDelete,
         openViewer, backToGrid, stepViewer, ensureFileInfo,
         selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders, previewSrc, gridThumbSrc,
         undo, onSliderPointerDown, toast, onImageLoad,
@@ -1436,7 +1558,7 @@
             <div class="tree-rows" v-if="folderTree">
               <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir"
                          :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" :auto-expand-depth="treeAutoExpandDepth"
-                         :persist-expansion="saveSession" @select="selectFolder"></tree-node>
+                         :persist-expansion="saveSession" @select="selectFolder" @contextmenu="openFolderContextMenu"></tree-node>
             </div>
             <div class="tree-rows" v-else><div class="tree-row dim" style="cursor:default">no folder watched</div></div>
             <div class="tree-label">Tags</div>
@@ -1698,7 +1820,7 @@
             <div class="tree-rows" v-if="folderTree">
               <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir"
                          :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" :auto-expand-depth="treeAutoExpandDepth"
-                         :persist-expansion="saveSession" @select="selectFolder"></tree-node>
+                         :persist-expansion="saveSession" @select="selectFolder" @contextmenu="openFolderContextMenu"></tree-node>
             </div>
             <div class="tree-receipt"><div>{{ state.receipt.line1 }}</div><div class="delta">{{ state.receipt.line2 }}</div></div>
           </div>
@@ -1792,6 +1914,18 @@
                       @strip="stripMetadataForSelection"></cleanup-dialog>
 
       <shortcuts-sheet v-if="state.shortcutsHeld"></shortcuts-sheet>
+
+      <folder-context-menu v-if="state.folderContextMenu.open" :x="state.folderContextMenu.x" :y="state.folderContextMenu.y"
+                            :is-root="state.folderContextMenu.targetPath === activeTab.rootDir"
+                            @action="handleFolderContextAction"></folder-context-menu>
+
+      <rename-dialog v-if="state.folderRenameDialog.open" title="Rename folder" :value="basename(state.folderRenameDialog.path)"
+                     @close="state.folderRenameDialog.open = false" @rename="commitFolderRename"></rename-dialog>
+
+      <confirm-dialog v-if="state.folderDeleteDialog.open" title="Delete folder"
+                      :message="'Move “' + basename(state.folderDeleteDialog.path) + '” and everything inside it to the Trash?'"
+                      confirm-label="Move to Trash"
+                      @close="state.folderDeleteDialog.open = false" @confirm="commitFolderDelete"></confirm-dialog>
 
       <toast :message="state.toastMessage"></toast>
     </div>`,

@@ -227,6 +227,13 @@ app.whenReady().then(() => {
     return newPath;
   });
 
+  // Moves to the OS trash rather than unlinking outright, so a folder (or
+  // file) deleted from the tree view is recoverable the same way Finder's
+  // delete is.
+  ipcMain.handle('trash-path', async (_event, targetPath) => {
+    await shell.trashItem(targetPath);
+  });
+
   ipcMain.handle('choose-destination-folder', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory', 'createDirectory'],
