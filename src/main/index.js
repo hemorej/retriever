@@ -3,7 +3,7 @@
 // before CPU is actually the limit on modern machines.
 process.env.UV_THREADPOOL_SIZE = String(Math.max(4, require('os').cpus().length));
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -109,8 +109,31 @@ function startWatching(rootDir) {
 }
 
 app.whenReady().then(() => {
-  if (process.platform === 'darwin' && app.dock) {
-    app.dock.setIcon(dockIconPath);
+  // Electron's auto-generated default menu hardcodes the "Electron" label
+  // for the first (bold) item on unpackaged dev runs, ignoring
+  // app.setName() — building our own template with the real name is the
+  // only way to fix that outside a packaged build.
+  if (process.platform === 'darwin') {
+    const template = [
+      {
+        label: 'Retriever',
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'services' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      },
+      { role: 'editMenu' },
+      { role: 'viewMenu' },
+      { role: 'windowMenu' },
+    ];
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   }
   database = db.openDb(app.getPath('userData'));
   sessionPath = path.join(app.getPath('userData'), 'session.json');
