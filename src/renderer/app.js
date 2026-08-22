@@ -1094,7 +1094,11 @@
         snapshotCurrentTab();
         const activeRoot = activeTab.value && activeTab.value.rootDir;
         window.retriever.saveSession({
-          tabs: state.tabs.map((t) => ({ rootDir: t.rootDir, label: t.label, folderFilter: t.folderFilter, expandedFolders: t.expandedFolders || null })),
+          // t.expandedFolders, though assigned as a plain array in
+          // snapshotCurrentTab, reads back out of state.tabs (a reactive
+          // Proxy) as a reactive-wrapped array — same issue as state.selection
+          // above. IPC's structured clone throws on that, so re-flatten here.
+          tabs: state.tabs.map((t) => ({ rootDir: t.rootDir, label: t.label, folderFilter: t.folderFilter, expandedFolders: t.expandedFolders ? [...t.expandedFolders] : null })),
           activeIndex: Math.max(0, state.tabs.findIndex((t) => t.id === state.activeTabId)),
           snapshot: activeRoot ? (tabSnapshots.get(activeRoot) || []).slice(0, SNAPSHOT_PERSIST_CAP) : [],
         });
