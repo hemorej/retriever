@@ -1139,7 +1139,10 @@
       }
       function selectFolder(p) {
         state.folderFilter = p;
-        if (activeTab.value) activeTab.value.folderFilter = p;
+        if (activeTab.value) {
+          activeTab.value.folderFilter = p;
+          activeTab.value.label = basename(p) || p;
+        }
         saveSession();
         loadSubfolders(p);
         // Auto-expand the selected folder and all of its ancestors so the
