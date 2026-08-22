@@ -64,6 +64,23 @@ inside them (not spread across subfolders) will render slower past a
 1500-tile cap. Scoping the tree to a subfolder, or building a virtualized
 grid, are the natural next steps if that turns out to matter.
 
+## App data
+
+Retriever keeps everything it persists under Electron's per-app userData
+directory — on macOS, `~/Library/Application Support/Retriever/`:
+
+- `retriever.sqlite3` (+ `-wal`/`-shm`) — the catalog db: tags, groups,
+  and file identity (see `src/main/db.js`)
+- `thumbnails/` — disk-cached grid thumbnails (`src/main/thumbnails.js`)
+- `session.json` — open tabs, each tab's current folder/subfolder, a grid
+  snapshot for instant repaint on relaunch, and each tab's tree
+  expand/collapse shape
+
+Deleting the whole folder resets the app to a clean first-launch state.
+Deleting just one of the above resets only that piece (e.g. remove
+`retriever.sqlite3*` to wipe tags/groups while keeping thumbnails and
+session state, or remove `thumbnails/` to force thumbnail regeneration).
+
 ## Design reference
 
 The UI in `src/renderer/` is a from-scratch Vue implementation of the
