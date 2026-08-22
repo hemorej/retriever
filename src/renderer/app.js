@@ -1302,6 +1302,9 @@
           if (el) { gridViewportHeight.value = el.clientHeight; gridResizeObserver.observe(el); }
         }, { immediate: true });
         watch(() => [state.thumbSize, renderedEntries.value.length], () => nextTick(measureTileRowExtra), { immediate: true });
+        watch(() => activeTab.value && (activeTab.value.folderFilter || activeTab.value.rootDir), (dir) => {
+          document.title = dir ? basename(dir) : 'Retriever';
+        }, { immediate: true });
       });
       onUnmounted(() => {
         window.removeEventListener('keydown', onKeydown);
