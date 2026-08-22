@@ -79,6 +79,7 @@
       // main/index.js) — real filesystem structure, not just image-bearing
       // folders, so empty/RAW/non-image subdirs still show up and expand.
       subfolders: Object, expanded: Object, loadSubfolders: Function,
+      autoExpandDepth: { type: Number, default: 2 }, persistExpansion: Function,
     },
     emits: ['select'],
     computed: {
@@ -97,10 +98,13 @@
     },
     created() {
       this.loadSubfolders(this.node.path);
-      if (this.depth < 2) this.expanded.add(this.node.path);
+      if (this.depth < this.autoExpandDepth) this.expanded.add(this.node.path);
     },
     methods: {
-      toggle() { this.expanded.has(this.node.path) ? this.expanded.delete(this.node.path) : this.expanded.add(this.node.path); },
+      toggle() {
+        this.expanded.has(this.node.path) ? this.expanded.delete(this.node.path) : this.expanded.add(this.node.path);
+        if (this.persistExpansion) this.persistExpansion();
+      },
     },
     template: `
       <div>
@@ -113,7 +117,8 @@
         </div>
         <template v-if="open">
           <tree-node v-for="c in childList" :key="c.path" :node="c" :depth="depth + 1" :active-path="activePath"
-                     :subfolders="subfolders" :expanded="expanded" :load-subfolders="loadSubfolders" @select="$emit('select', $event)"></tree-node>
+                     :subfolders="subfolders" :expanded="expanded" :load-subfolders="loadSubfolders" :auto-expand-depth="autoExpandDepth"
+                     :persist-expansion="persistExpansion" @select="$emit('select', $event)"></tree-node>
         </template>
       </div>`,
   };
@@ -435,7 +440,7 @@
     components: { AppMark, Toast, ContextMenu, TagMenu, FilterPanel, MassRenameDialog, CleanupDialog, ShortcutsSheet },
     setup() {
       const state = reactive({
-        tabs: [{ id: uid('tab'), rootDir: null, watching: false, label: 'Untitled' }],
+        tabs: [{ id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', expandedFolders: null }],
         activeTabId: null,
         files: reactive(new Map()),
         groups: [],
@@ -526,7 +531,9 @@
       // the active tab via saveSession/restoreSession below.
       const tabSnapshots = new Map(); // rootDir -> [{path, size, mtimeMs}]
       function snapshotCurrentTab(tab = activeTab.value) {
-        if (!tab || !tab.rootDir || state.files.size === 0) return;
+        if (!tab || !tab.rootDir) return;
+        tab.expandedFolders = Array.from(state.expandedFolders);
+        if (state.files.size === 0) return;
         tabSnapshots.set(tab.rootDir, Array.from(state.files.values(), (f) => ({ path: f.path, size: f.size, mtimeMs: f.mtimeMs })));
       }
       // While a scan seeded from a snapshot is in flight: seededPaths is
@@ -621,6 +628,7 @@
         for (const t of state.tabs) t.watching = false;
         const tab = activeTab.value;
         tab.rootDir = rootDir;
+        tab.expandedFolders = null;
         tab.watching = true;
         tab.label = basename(rootDir) || rootDir;
         selectFolder(rootDir);
@@ -813,6 +821,10 @@
         if (e.metaKey) selectToggle(p);
         else if (e.shiftKey) selectRange(p);
         else selectSingle(p);
+      }
+      function onGridAreaClick(e) {
+        state.contextMenu.open = false;
+        if (e.target === e.currentTarget) state.selection = [];
       }
       function selectAll() { state.selection = [...navOrder.value]; }
 
@@ -1007,6 +1019,7 @@
         state.expandedGroups.clear();
         state.selection = [];
         state.expandedFolders.clear();
+        for (const p of (tab.expandedFolders || [])) state.expandedFolders.add(p);
         state.subfoldersCache.clear();
         state.viewMode = 'grid';
         state.permissionDenied.active = false;
@@ -1051,7 +1064,7 @@
         saveSession();
       }
       function addTab() {
-        const t = { id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', folderFilter: null };
+        const t = { id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', folderFilter: null, expandedFolders: null };
         state.tabs.push(t);
         state.activeTabId = t.id;
         saveSession();
@@ -1081,7 +1094,7 @@
         snapshotCurrentTab();
         const activeRoot = activeTab.value && activeTab.value.rootDir;
         window.retriever.saveSession({
-          tabs: state.tabs.map((t) => ({ rootDir: t.rootDir, label: t.label, folderFilter: t.folderFilter })),
+          tabs: state.tabs.map((t) => ({ rootDir: t.rootDir, label: t.label, folderFilter: t.folderFilter, expandedFolders: t.expandedFolders || null })),
           activeIndex: Math.max(0, state.tabs.findIndex((t) => t.id === state.activeTabId)),
           snapshot: activeRoot ? (tabSnapshots.get(activeRoot) || []).slice(0, SNAPSHOT_PERSIST_CAP) : [],
         });
@@ -1092,6 +1105,7 @@
         state.tabs = session.tabs.map((t) => ({
           id: uid('tab'), rootDir: t.rootDir || null, watching: false,
           label: t.label || 'Untitled', folderFilter: t.folderFilter || t.rootDir || null,
+          expandedFolders: Array.isArray(t.expandedFolders) ? t.expandedFolders : null,
         }));
         const active = state.tabs[session.activeIndex] || state.tabs[0];
         state.activeTabId = active.id;
@@ -1105,6 +1119,11 @@
       restoreSession();
 
       // ---------- folder tree ----------
+      // Only auto-open the root + its first level of children when this tab
+      // has no persisted expansion state yet (a freshly-picked folder) — once
+      // a shape has been saved (even an all-collapsed one), respect it as-is
+      // instead of forcing folders back open on every relaunch/tab switch.
+      const treeAutoExpandDepth = computed(() => (activeTab.value && activeTab.value.expandedFolders) ? 1 : 2);
       const folderTree = computed(() => {
         if (!activeTab.value.watching || !activeTab.value.rootDir) return null;
         const root = { name: basename(activeTab.value.rootDir) || activeTab.value.rootDir, path: activeTab.value.rootDir, children: new Map(), count: 0 };
@@ -1234,6 +1253,7 @@
           else if (state.filterPanelOpen) state.filterPanelOpen = false;
           else if (state.comparePaths.length) state.comparePaths.length = 0;
           else if (state.viewMode === 'viewer') backToGrid();
+          else if (state.selection.length) state.selection = [];
           return;
         }
         if (e.key === 'Enter' && activePath.value && state.viewMode === 'grid') { openViewer(activePath.value); return; }
@@ -1337,7 +1357,7 @@
         gridEntries, renderedEntries, expandedGroupList, navOrder, activePath, activeFile, activeGroupId, systemState, isNew,
         compareMode, compareGridDims, comparableSelectionCount, openCompareView, exitCompareToSingle,
         gridAreaEl, onGridScroll, tileGridPosition, gridRowHeight, gridTotalRows,
-        onTileClick, selectSingle, selectAll,
+        onTileClick, onGridAreaClick, selectSingle, selectAll, treeAutoExpandDepth, saveSession,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
         rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup,
         duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, revealInFinder,
@@ -1411,7 +1431,8 @@
             <div class="tree-label">Places</div>
             <div class="tree-rows" v-if="folderTree">
               <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir"
-                         :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" @select="selectFolder"></tree-node>
+                         :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" :auto-expand-depth="treeAutoExpandDepth"
+                         :persist-expansion="saveSession" @select="selectFolder"></tree-node>
             </div>
             <div class="tree-rows" v-else><div class="tree-row dim" style="cursor:default">no folder watched</div></div>
             <div class="tree-label">Tags</div>
@@ -1429,7 +1450,7 @@
           </div>
 
           <!-- grid / system states -->
-          <div class="grid-area" ref="gridAreaEl" @scroll="onGridScroll" :style="{ '--cols': 6, '--thumb-h': state.thumbSize + 'px' }" @click="state.contextMenu.open = false">
+          <div class="grid-area" ref="gridAreaEl" @scroll="onGridScroll" :style="{ '--cols': 6, '--thumb-h': state.thumbSize + 'px' }" @click="onGridAreaClick">
 
             <template v-if="systemState === 'no-folder'">
               <div class="state-pane">
@@ -1672,7 +1693,8 @@
             <div class="tree-label">Places</div>
             <div class="tree-rows" v-if="folderTree">
               <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir"
-                         :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" @select="selectFolder"></tree-node>
+                         :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" :auto-expand-depth="treeAutoExpandDepth"
+                         :persist-expansion="saveSession" @select="selectFolder"></tree-node>
             </div>
             <div class="tree-receipt"><div>{{ state.receipt.line1 }}</div><div class="delta">{{ state.receipt.line2 }}</div></div>
           </div>
