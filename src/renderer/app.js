@@ -1352,7 +1352,6 @@
     <div class="app-window">
       <!-- title bar -->
       <div class="titlebar">
-        <div class="traffic-lights"><span class="traffic-light tl-red"></span><span class="traffic-light tl-yellow"></span><span class="traffic-light tl-green"></span></div>
         <div class="brand"><app-mark :size="18"></app-mark><span class="brand-name">Retriever</span></div>
         <div class="tabstrip">
           <div v-for="t in state.tabs" :key="t.id" class="tab" :class="{ active: t.id === state.activeTabId }" @click="selectTab(t.id)">

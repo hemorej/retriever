@@ -86,10 +86,7 @@ body {
   border-bottom: 1px solid var(--border-window);
   -webkit-app-region: drag;
 }
-.traffic-lights { display: flex; gap: 8px; align-items: center; height: 40px; -webkit-app-region: no-drag; }
-.traffic-light { width: 11px; height: 11px; border-radius: 50%; }
-.tl-red { background: #ec6a5e; } .tl-yellow { background: #f4bf4f; } .tl-green { background: #61c454; }
-.brand { display: flex; align-items: center; gap: 7px; height: 40px; padding-left: 6px; }
+.brand { display: flex; align-items: center; gap: 7px; height: 40px; }
 .brand-name { font-size: 12px; font-weight: 600; letter-spacing: .2px; color: #b9b6b2; }
 .tabstrip { display: flex; align-items: flex-end; gap: 2px; flex: 1; min-width: 0; -webkit-app-region: no-drag; }
 .tab {
