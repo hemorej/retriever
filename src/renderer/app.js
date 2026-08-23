@@ -464,7 +464,7 @@
           ]},
           { label: 'Tag & sort', rows: [
             ['1', 'select'], ['2', 'reject'], ['3', 'maybe'], ['4', 'published'], ['0', 'clear tags'],
-            ['⌘⌥1', 'sort by name'], ['⌘⌥2', 'sort by date'], ['⌘⌥3', 'sort by size'],
+            ['⌘⌥1', 'sort by name'], ['⌘⌥2', 'sort by date modified'],
           ]},
           { label: 'Files', rows: [
             ['[ ]', 'rotate ccw / cw'], ['⌘R', 'rename…'], ['⌘⇧R', 'mass rename…'], ['⌘D', 'duplicate'],
@@ -757,7 +757,7 @@
         const dir = state.sortDir === 'asc' ? 1 : -1;
         list.sort((a, b) => {
           if (state.sortMode === 'name') return a.name.localeCompare(b.name) * dir;
-          return (a.addedAt - b.addedAt) * dir;
+          return (a.mtimeMs - b.mtimeMs) * dir;
         });
         return list;
       });
@@ -1414,7 +1414,7 @@
         if (e.metaKey && e.key.toLowerCase() === 'o' && e.shiftKey) { e.preventDefault(); if (activePath.value) revealInFinder(activePath.value); return; }
         if (e.metaKey && e.key === 'z') { e.preventDefault(); undo(); return; }
         if (e.metaKey && e.key === ',') { e.preventDefault(); toast('Preferences aren’t implemented in this pass.'); return; }
-        if (e.metaKey && e.altKey && ['1', '2', '3'].includes(e.key)) {
+        if (e.metaKey && e.altKey && ['1', '2'].includes(e.key)) {
           e.preventDefault();
           state.sortMode = e.key === '1' ? 'name' : 'date';
           return;
