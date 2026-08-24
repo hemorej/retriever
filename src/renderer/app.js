@@ -143,6 +143,8 @@
         <div class="item" @click="$emit('action', 'strip-metadata')"><span>Remove all metadata</span></div>
         <div class="sep"></div>
         <div class="item" @click="$emit('action', 'reveal')"><span>Reveal in Finder</span></div>
+        <div class="sep"></div>
+        <div class="item" @click="$emit('action', 'delete')"><span>Delete…</span><span class="hint">⌫</span></div>
       </div>`,
   };
 
@@ -530,6 +532,7 @@
         folderContextMenu: reactive({ open: false, x: 0, y: 0, targetPath: null }),
         folderRenameDialog: reactive({ open: false, path: null }),
         folderDeleteDialog: reactive({ open: false, path: null }),
+        fileDeleteDialog: reactive({ open: false, paths: [] }),
         tagMenu: reactive({ open: false, x: 0, y: 0 }),
         renameDialogOpen: false,
         cleanupDialogOpen: false,
@@ -1030,7 +1033,24 @@
           case 'rotate': rotateSelection(90); break;
           case 'strip-metadata': state.cleanupDialogOpen = true; break;
           case 'reveal': revealInFinder(p); break;
+          case 'delete': confirmFileDelete(state.selection.length ? state.selection : [p]); break;
         }
+      }
+      function confirmFileDelete(paths) {
+        if (!paths.length) return;
+        state.fileDeleteDialog.paths = paths;
+        state.fileDeleteDialog.open = true;
+      }
+      async function commitFileDelete() {
+        const paths = state.fileDeleteDialog.paths;
+        state.fileDeleteDialog.open = false;
+        if (!paths.length) return;
+        for (const p of paths) {
+          try { await window.retriever.trashPath(p); } catch (e) { toast(e.message); }
+        }
+        toast(`Moved ${paths.length} file${paths.length === 1 ? '' : 's'} to Trash`);
+        state.selection = state.selection.filter(p => !paths.includes(p));
+        if (state.viewMode === 'viewer' && paths.includes(activePath.value)) backToGrid();
       }
 
       // ---------- tree folder context menu ----------
@@ -1372,6 +1392,7 @@
           else if (state.folderContextMenu.open) state.folderContextMenu.open = false;
           else if (state.folderRenameDialog.open) state.folderRenameDialog.open = false;
           else if (state.folderDeleteDialog.open) state.folderDeleteDialog.open = false;
+          else if (state.fileDeleteDialog.open) state.fileDeleteDialog.open = false;
           else if (state.tagMenu.open) state.tagMenu.open = false;
           else if (state.renameDialogOpen) state.renameDialogOpen = false;
           else if (state.cleanupDialogOpen) state.cleanupDialogOpen = false;
@@ -1429,6 +1450,7 @@
         if (!e.metaKey && e.key === '0') { clearTagsForSelection(); return; }
         if (e.key === '[') { rotateSelection(-90); return; }
         if (e.key === ']') { rotateSelection(90); return; }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !e.metaKey && !e.altKey) { e.preventDefault(); if (state.selection.length) confirmFileDelete(state.selection); return; }
       }
       function onKeyup(e) {
         if (e.key === 'Meta' || e.key === '/') state.shortcutsHeld = false;
@@ -1487,7 +1509,7 @@
         rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup,
         duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, revealInFinder,
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
-        openFileContextMenu, handleContextAction,
+        openFileContextMenu, handleContextAction, confirmFileDelete, commitFileDelete,
         openFolderContextMenu, handleFolderContextAction, commitFolderRename, commitFolderDelete,
         openViewer, backToGrid, stepViewer, ensureFileInfo,
         selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders, previewSrc, gridThumbSrc,
@@ -1921,6 +1943,11 @@
 
       <rename-dialog v-if="state.folderRenameDialog.open" title="Rename folder" :value="basename(state.folderRenameDialog.path)"
                      @close="state.folderRenameDialog.open = false" @rename="commitFolderRename"></rename-dialog>
+
+      <confirm-dialog v-if="state.fileDeleteDialog.open" title="Delete file"
+                      :message="state.fileDeleteDialog.paths.length === 1 ? 'Move “' + basename(state.fileDeleteDialog.paths[0]) + '” to the Trash?' : 'Move ' + state.fileDeleteDialog.paths.length + ' files to the Trash?'"
+                      confirm-label="Move to Trash"
+                      @close="state.fileDeleteDialog.open = false" @confirm="commitFileDelete"></confirm-dialog>
 
       <confirm-dialog v-if="state.folderDeleteDialog.open" title="Delete folder"
                       :message="'Move “' + basename(state.folderDeleteDialog.path) + '” and everything inside it to the Trash?'"
