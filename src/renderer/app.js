@@ -1469,7 +1469,11 @@
         });
         watch(gridAreaEl, (el, prevEl) => {
           if (prevEl) gridResizeObserver.unobserve(prevEl);
-          if (el) { gridViewportHeight.value = el.clientHeight; gridResizeObserver.observe(el); }
+          // .grid-area unmounts across a grid<->viewer switch, so a fresh
+          // element always starts at scrollTop 0 — resync gridScrollTop here,
+          // or the virtualized slice stays computed for the old offset and
+          // renders nothing at the (now reset) visible scroll position.
+          if (el) { gridScrollTop.value = el.scrollTop; gridViewportHeight.value = el.clientHeight; gridResizeObserver.observe(el); }
         }, { immediate: true });
         watch(() => [state.thumbSize, renderedEntries.value.length], () => nextTick(measureTileRowExtra), { immediate: true });
         watch(() => activeTab.value && (activeTab.value.folderFilter || activeTab.value.rootDir), (dir) => {
