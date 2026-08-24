@@ -586,7 +586,27 @@
         flushScheduled = false;
         const batch = eventQueue;
         eventQueue = [];
-        for (const evt of batch) applyFsEvent(evt);
+        const counts = { added: 0, removed: 0, lost: 0, moved: 0 };
+        let errored = false;
+        for (const evt of batch) {
+          if (evt.type === 'error') errored = true;
+          applyFsEvent(evt, counts);
+        }
+        if (errored) return; // error event already set the receipt directly
+        const parts = [];
+        const renamed = Math.min(counts.lost, counts.moved);
+        const lostOnly = counts.lost - renamed;
+        const movedOnly = counts.moved - renamed;
+        if (counts.added) parts.push(`+${counts.added} added`);
+        if (counts.removed) parts.push(`−${counts.removed} removed`);
+        if (renamed) parts.push(`${renamed} renamed`);
+        if (lostOnly) parts.push(`−${lostOnly} moved`);
+        if (movedOnly) parts.push(`+${movedOnly} moved`);
+        if (parts.length) {
+          state.receipt.line1 = 'fsevents · just now';
+          state.receipt.line2 = parts.join(' · ');
+          state.receipt.amber = false;
+        }
       }
       function isNew(f) {
         return state.hasIndexedOnce && f.addedAt && (state.now - f.addedAt) < 3000;
@@ -612,7 +632,7 @@
       let seededPaths = null;
       let confirmedPaths = null;
 
-      function applyFsEvent(evt) {
+      function applyFsEvent(evt, counts) {
         if (evt.type === 'added') {
           if (!isImagePath(evt.filePath)) return;
           const already = state.files.get(evt.filePath);
@@ -631,18 +651,14 @@
             tags: [], lost: false, lostAt: null, addedAt: Date.now(),
             info: null, dims: null, size: evt.size, mtimeMs: evt.mtimeMs,
           });
-          state.receipt.line1 = 'fsevents · just now';
-          state.receipt.line2 = '+1 added';
-          state.receipt.amber = false;
+          counts.added += 1;
         } else if (evt.type === 'removed') {
           state.files.delete(evt.filePath);
-          state.receipt.line1 = 'fsevents · just now';
-          state.receipt.line2 = '−1 removed';
+          counts.removed += 1;
         } else if (evt.type === 'lost') {
           const f = state.files.get(evt.filePath);
           if (f) { f.lost = true; f.lostAt = Date.now(); }
-          state.receipt.line1 = 'fsevents · just now';
-          state.receipt.line2 = '−1 moved';
+          counts.lost += 1;
         } else if (evt.type === 'moved') {
           const prev = state.files.get(evt.from);
           const meta = prev || { path: evt.filePath, tags: [], addedAt: Date.now(), info: null, dims: null };
@@ -655,8 +671,7 @@
           state.files.set(evt.filePath, meta);
           const i = state.selection.indexOf(evt.from);
           if (i !== -1) state.selection[i] = evt.filePath;
-          state.receipt.line1 = 'fsevents · just now';
-          state.receipt.line2 = '+1 moved';
+          counts.moved += 1;
         } else if (evt.type === 'ready') {
           state.indexing.active = false;
           state.hasIndexedOnce = true;
