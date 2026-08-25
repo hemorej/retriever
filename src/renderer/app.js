@@ -303,7 +303,7 @@
     emits: ['close', 'rename'],
     data() {
       return {
-        literal: 'renamed', startAt: 1, separator: '_', caseMode: 'lower',
+        literal: 'renamed', postfix: '', startAt: 1, separator: '_', caseMode: 'lower',
         useCounter: true, useCaptureDate: false, useDimensions: false, useOriginalName: false, useFolder: false,
       };
     },
@@ -329,6 +329,7 @@
       dimensionsStr(f) { return f.dims ? `${f.dims.w}x${f.dims.h}` : '…x…'; },
       folderName(f) { const parts = f.path.split('/'); return parts[parts.length - 2] || ''; },
       focusLiteral() { this.$refs.literalInput?.focus(); },
+      focusPostfix() { this.$refs.postfixInput?.focus(); },
     },
     computed: {
       previews() {
@@ -342,6 +343,7 @@
           if (this.useFolder) parts.push(this.folderName(f));
           if (this.useCounter) parts.push(String(this.startAt + i).padStart(3, '0'));
           let base = parts.join(this.separator) || stripExt(f.name);
+          if (this.postfix) base += this.separator + this.postfix;
           if (this.caseMode === 'lower') base = base.toLowerCase();
           if (this.caseMode === 'upper') base = base.toUpperCase();
           return { old: f.name, next: base + ext, file: f };
@@ -366,6 +368,8 @@
                 <template v-if="useOriginalName"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useOriginalName = false">{original name}</span></template>
                 <template v-if="useFolder"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useFolder = false">{folder}</span></template>
                 <template v-if="useCounter"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useCounter = false">{counter:{{ String(startAt).padStart(3,'0') }}}</span></template>
+                <span class="dot">·</span>
+                <input ref="postfixInput" v-model="postfix" placeholder="+ text after" style="background:transparent;border:none;outline:none;color:#f0cf72;font:11.5px 'Geist Mono',ui-monospace,monospace;width:90px" />
                 <span class="caret"></span>
               </div>
               <div class="token-palette">
@@ -375,6 +379,7 @@
                 <span class="token-pill" :class="{ active: useOriginalName }" @click="useOriginalName = !useOriginalName">+ original name</span>
                 <span class="token-pill" :class="{ active: useFolder }" @click="useFolder = !useFolder">+ folder</span>
                 <span class="token-pill" :class="{ active: useDimensions }" @click="useDimensions = !useDimensions">+ dimensions</span>
+                <span class="token-pill" :class="{ active: !!postfix }" @click="focusPostfix">+ text after</span>
               </div>
             </div>
             <div class="opts-row">
@@ -1023,7 +1028,22 @@
       }
       function cancelInlineRename() { state.inlineRenamePath = null; }
 
+      // Defined as a real function rather than inline in the template: an
+      // expression embedded directly in a `@rename="..."` attribute is
+      // compiled inside Vue's `with(_ctx)` block, where a bare `window`
+      // reference resolves through the component's render-context proxy
+      // instead of the real global — it silently evaluates to undefined
+      // there, breaking `window.retriever.*`.
+      async function commitMassRename(previews) {
+        for (const p of previews) {
+          try { await window.retriever.renameFile(p.file.path, p.next); } catch (e) { toast(e.message); }
+        }
+        state.renameDialogOpen = false;
+      }
+
       async function revealInFinder(p) { await window.retriever.revealInFinder(p); }
+      function openPrivacySettings() { window.retriever.openPrivacySettings(); }
+      function openContainingFolder(p) { window.retriever.openFolder(p); }
 
       // ---------- context menu ----------
       function openFileContextMenu(e, p) {
@@ -1526,7 +1546,8 @@
         onTileClick, onGridAreaClick, selectSingle, selectAll, treeAutoExpandDepth, saveSession,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
         rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup,
-        duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, revealInFinder,
+        duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, commitMassRename, revealInFinder,
+        openPrivacySettings, openContainingFolder,
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
         openFileContextMenu, handleContextAction, confirmFileDelete, commitFileDelete,
         openFolderContextMenu, handleFolderContextAction, commitFolderRename, commitFolderDelete,
@@ -1642,7 +1663,7 @@
                   <div class="state-copy hl">{{ state.permissionDenied.path }}</div>
                   <div class="state-copy">Grant access under Privacy &amp; Security → Files and Folders. The watch resumes on its own.</div>
                   <div class="state-actions" style="margin-top:auto">
-                    <div class="btn-accent-block" style="flex:none;padding:6px 12px" @click="window.retriever.openPrivacySettings()">Open settings</div>
+                    <div class="btn-accent-block" style="flex:none;padding:6px 12px" @click="openPrivacySettings">Open settings</div>
                     <div class="btn-ghost" @click="chooseFolder">Retry</div>
                   </div>
                 </div>
@@ -1878,7 +1899,7 @@
                     <template v-else> Its tags are held for 30 days.</template>
                   </div>
                   <div class="state-actions" style="margin-top:auto">
-                    <div class="btn-ghost" @click="window.retriever.openFolder(activeFile.path)">Find it</div>
+                    <div class="btn-ghost" @click="openContainingFolder(activeFile.path)">Find it</div>
                     <div class="btn-ghost" @click="state.files.delete(activeFile.path); backToGrid()">Forget</div>
                   </div>
                 </div>
@@ -1947,7 +1968,7 @@
       <mass-rename-dialog v-if="state.renameDialogOpen" :files="state.selection.map(p => state.files.get(p)).filter(Boolean)"
                            :folder-label="shortenPath(activeTab.rootDir)"
                            @close="state.renameDialogOpen = false"
-                           @rename="async (previews) => { for (const p of previews) { try { await window.retriever.renameFile(p.file.path, p.next); } catch (e) { toast(e.message); } } state.renameDialogOpen = false }"></mass-rename-dialog>
+                           @rename="commitMassRename"></mass-rename-dialog>
 
       <cleanup-dialog v-if="state.cleanupDialogOpen" :files="state.selection.map(p => state.files.get(p)).filter(Boolean)"
                       :group-label="activeGroupId ? ('group “' + groupById.get(activeGroupId).name + '” · ' + state.selection.length + ' files') : (state.selection.length + ' files')"

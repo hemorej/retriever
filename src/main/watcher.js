@@ -39,6 +39,13 @@ function createWatcher({ rootDir, database, onEvent }) {
     awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
   });
 
+  // db.markLost() nulls out a row's path column (that's what "lost" means
+  // in the schema), so by the time handleAdd re-queries db.getLost() the
+  // row's own `path` field can no longer say where it used to be. Track the
+  // pre-lost path here, keyed by row id, so a matching 'add' can report a
+  // real `from` in its 'moved' event instead of null.
+  const lastKnownPath = new Map();
+
   watcher.on('add', (filePath) => handleAdd(filePath));
   watcher.on('unlink', (filePath) => handleUnlink(filePath));
   watcher.on('error', (err) => onEvent({ type: 'error', message: err.message, code: err.code }));
@@ -53,8 +60,10 @@ function createWatcher({ rootDir, database, onEvent }) {
     for (const candidate of candidates) {
       const hash = await hashFile(filePath);
       if (hash === candidate.hash) {
+        const from = lastKnownPath.get(candidate.id) ?? candidate.path;
+        lastKnownPath.delete(candidate.id);
         db.reattachPath(database, hash, filePath, mtimeMs);
-        onEvent({ type: 'moved', filePath, from: candidate.path, fileId: candidate.id });
+        onEvent({ type: 'moved', filePath, from, fileId: candidate.id });
         return;
       }
     }
@@ -67,6 +76,7 @@ function createWatcher({ rootDir, database, onEvent }) {
 
     const row = db.getByPath(database, filePath);
     if (row) {
+      lastKnownPath.set(row.id, filePath);
       db.markLost(database, filePath);
       onEvent({ type: 'lost', filePath, fileId: row.id });
     } else {
