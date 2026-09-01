@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('retriever', {
   watchFolder: (dir) => ipcRenderer.invoke('watch-folder', dir),
   tagFile: (filePath, tagName) => ipcRenderer.invoke('tag-file', { filePath, tagName }),
   getTags: (filePath) => ipcRenderer.invoke('get-tags', filePath),
+  getAllTags: () => ipcRenderer.invoke('get-all-tags'),
   getLostFiles: () => ipcRenderer.invoke('get-lost-files'),
   getFileInfo: (filePath) => ipcRenderer.invoke('get-file-info', filePath),
   clearTags: (filePath) => ipcRenderer.invoke('clear-tags', filePath),

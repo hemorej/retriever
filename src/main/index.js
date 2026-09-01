@@ -169,6 +169,9 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-lost-files', () => db.getLost(database));
 
+  // Bulk tag lookup for renderer startup hydration — { path: [tagNames] }.
+  ipcMain.handle('get-all-tags', () => db.getAllFileTags(database));
+
   // Preload runs sandboxed and can't require('os')/require('path') itself,
   // so the renderer asks main for these instead of reading them locally.
   ipcMain.handle('get-home-dir', () => os.homedir());

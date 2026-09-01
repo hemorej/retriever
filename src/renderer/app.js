@@ -48,6 +48,8 @@
     { name: 'published', className: 't-published', var: 'var(--tag-published)' },
   ];
   const TAG_BY_KEY = { 1: 'select', 2: 'reject', 3: 'maybe', 4: 'published' };
+  // Sort a folder falls back to when the user has never explicitly sorted it.
+  const DEFAULT_SORT = { mode: 'date', dir: 'desc' };
   function tagMeta(name) { return TAGS.find((t) => t.name === name) || { className: '', var: '#888' }; }
 
   // ---------- small shared components ----------
@@ -526,8 +528,11 @@
         comparePaths: reactive([]),
         thumbSize: 140,
         search: '',
-        sortMode: 'date',
-        sortDir: 'desc',
+        sortMode: DEFAULT_SORT.mode,
+        sortDir: DEFAULT_SORT.dir,
+        // path -> { mode, dir }; the sort last chosen for each folder,
+        // restored on navigation and persisted across restarts.
+        folderSorts: reactive(new Map()),
         filterPanelOpen: false,
         filters: reactive({
           tags: new Set(), tagMatch: 'any', types: new Set(),
@@ -637,6 +642,26 @@
       let seededPaths = null;
       let confirmedPaths = null;
 
+      // Tags/groups live only in the sqlite catalog, not on disk — the
+      // watcher reports every file as a plain untagged fs entry. This holds
+      // the catalog's { path: [tagNames] } so newly-seen tiles start with
+      // their saved tags, loaded once per watch instead of per file.
+      let persistedTags = {};
+      function applyPersistedTags() {
+        for (const [p, f] of state.files) {
+          const t = persistedTags[p];
+          if (t && t.length && f.tags.length === 0) f.tags = [...t];
+        }
+      }
+      async function hydrateTags() {
+        try {
+          persistedTags = (await window.retriever.getAllTags()) || {};
+        } catch {
+          persistedTags = {};
+        }
+        applyPersistedTags();
+      }
+
       function applyFsEvent(evt, counts) {
         if (evt.type === 'added') {
           if (!isImagePath(evt.filePath)) return;
@@ -653,7 +678,8 @@
           state.indexing.seen += 1;
           state.files.set(evt.filePath, {
             path: evt.filePath, name: basename(evt.filePath), dir: dirname(evt.filePath),
-            tags: [], lost: false, lostAt: null, addedAt: Date.now(),
+            tags: persistedTags[evt.filePath] ? [...persistedTags[evt.filePath]] : [],
+            lost: false, lostAt: null, addedAt: Date.now(),
             info: null, dims: null, size: evt.size, mtimeMs: evt.mtimeMs,
           });
           counts.added += 1;
@@ -680,6 +706,7 @@
         } else if (evt.type === 'ready') {
           state.indexing.active = false;
           state.hasIndexedOnce = true;
+          applyPersistedTags(); // catch files that landed before hydrateTags resolved
           if (seededPaths) {
             for (const p of seededPaths) {
               if (!confirmedPaths.has(p)) state.files.delete(p);
@@ -721,6 +748,7 @@
         tab.watching = true;
         tab.label = basename(rootDir) || rootDir;
         selectFolder(rootDir);
+        hydrateTags();
       }
 
       async function chooseFolder() {
@@ -926,6 +954,7 @@
           const prevTags = [...f.tags];
           const res = await window.retriever.tagFile(p, name);
           f.tags = res.tags;
+          persistedTags[p] = [...res.tags];
           state.undoStack.push({ type: 'tags', path: p, prevTags });
         }
       }
@@ -936,6 +965,7 @@
           const prevTags = [...f.tags];
           await window.retriever.clearTags(p);
           f.tags = [];
+          delete persistedTags[p];
           state.undoStack.push({ type: 'tags', path: p, prevTags });
         }
       }
@@ -1226,6 +1256,7 @@
 
         await window.retriever.watchFolder(tab.rootDir);
         selectFolder(tab.folderFilter || tab.rootDir);
+        hydrateTags();
       }
       async function selectTab(id) {
         if (id === state.activeTabId) return;
@@ -1274,11 +1305,25 @@
           tabs: state.tabs.map((t) => ({ rootDir: t.rootDir, label: t.label, folderFilter: t.folderFilter, expandedFolders: t.expandedFolders ? [...t.expandedFolders] : null })),
           activeIndex: Math.max(0, state.tabs.findIndex((t) => t.id === state.activeTabId)),
           snapshot: activeRoot ? (tabSnapshots.get(activeRoot) || []).slice(0, SNAPSHOT_PERSIST_CAP) : [],
+          // Map doesn't survive JSON.stringify in main, and its values read
+          // back off the reactive Proxy — which IPC's structured clone throws
+          // on (same reason expandedFolders/selection are re-flattened above).
+          // Rebuild as a plain object of plain {mode,dir}.
+          folderSorts: Object.fromEntries(
+            [...state.folderSorts].map(([p, v]) => [p, { mode: v.mode, dir: v.dir }])
+          ),
         });
       }
       async function restoreSession() {
         const session = await window.retriever.loadSession();
         if (!session || !Array.isArray(session.tabs) || session.tabs.length === 0) return;
+        if (session.folderSorts && typeof session.folderSorts === 'object') {
+          for (const [p, v] of Object.entries(session.folderSorts)) {
+            if (v && (v.mode === 'name' || v.mode === 'date') && (v.dir === 'asc' || v.dir === 'desc')) {
+              state.folderSorts.set(p, { mode: v.mode, dir: v.dir });
+            }
+          }
+        }
         state.tabs = session.tabs.map((t) => ({
           id: uid('tab'), rootDir: t.rootDir || null, watching: false,
           label: t.label || 'Untitled', folderFilter: t.folderFilter || t.rootDir || null,
@@ -1333,8 +1378,18 @@
           state.subfoldersCache.set(dir, []);
         }
       }
+      // Per-folder sort memory: restore the sort last chosen for this folder
+      // (default date/desc if it's never been sorted). The keydown/chip
+      // handlers only mutate state.sortMode/sortDir; a watch in onMounted
+      // writes changes back into state.folderSorts and persists the session.
+      function applyFolderSort(p) {
+        const saved = (p && state.folderSorts.get(p)) || DEFAULT_SORT;
+        state.sortMode = saved.mode;
+        state.sortDir = saved.dir;
+      }
       function selectFolder(p) {
         state.folderFilter = p;
+        applyFolderSort(p);
         if (activeTab.value) {
           activeTab.value.folderFilter = p;
           activeTab.value.label = basename(p) || p;
@@ -1405,6 +1460,8 @@
             await window.retriever.clearTags(action.path);
             for (const t of action.prevTags) await window.retriever.tagFile(action.path, t);
             f.tags = action.prevTags;
+            if (action.prevTags.length) persistedTags[action.path] = [...action.prevTags];
+            else delete persistedTags[action.path];
           }
         } else if (action.type === 'rotate') {
           state.rotations[action.path] = action.prevDeg;
@@ -1514,6 +1571,17 @@
         watch(() => activeTab.value && (activeTab.value.folderFilter || activeTab.value.rootDir), (dir) => {
           document.title = dir ? basename(dir) : 'Retriever';
         }, { immediate: true });
+        // Persist a sort change against the current folder. Skip no-op writes,
+        // and don't record folders left at the default the user never touched.
+        watch(() => [state.sortMode, state.sortDir], () => {
+          const p = state.folderFilter;
+          if (!p) return;
+          const cur = state.folderSorts.get(p);
+          if (cur && cur.mode === state.sortMode && cur.dir === state.sortDir) return;
+          if (!cur && state.sortMode === DEFAULT_SORT.mode && state.sortDir === DEFAULT_SORT.dir) return;
+          state.folderSorts.set(p, { mode: state.sortMode, dir: state.sortDir });
+          saveSession();
+        });
       });
       onUnmounted(() => {
         window.removeEventListener('keydown', onKeydown);

@@ -116,6 +116,24 @@ function getTagsForFile(db, fileId) {
     .map((r) => r.name);
 }
 
+// Every currently-present tracked file and its tags, as { path: [names] }.
+// One query so the renderer can hydrate tags on startup without a per-file
+// IPC round-trip (see the renderer performance guardrails in CLAUDE.md).
+function getAllFileTags(db) {
+  const rows = db
+    .prepare(
+      `SELECT files.path AS path, tags.name AS name
+       FROM file_tags
+       JOIN files ON files.id = file_tags.file_id
+       JOIN tags  ON tags.id  = file_tags.tag_id
+       WHERE files.path IS NOT NULL`
+    )
+    .all();
+  const map = {};
+  for (const r of rows) (map[r.path] || (map[r.path] = [])).push(r.name);
+  return map;
+}
+
 module.exports = {
   openDb,
   getByPath,
@@ -128,4 +146,5 @@ module.exports = {
   addTag,
   clearTags,
   getTagsForFile,
+  getAllFileTags,
 };
