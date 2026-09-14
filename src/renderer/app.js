@@ -894,6 +894,26 @@
         return order;
       });
 
+      // The filmstrip mounts one DOM cell (plus, for tracked files, an
+      // async previewSrc/loadImagePreview call) per entry. Unlike the main
+      // grid it isn't scroll-virtualized, so unbounded `navOrder` here
+      // reintroduces exactly the whole-folder-freeze bug the grid's
+      // renderedEntries virtualization above was built to fix — a large
+      // folder (e.g. ~/Pictures) opened into the viewer would hang the
+      // renderer with no way back to the grid. Window it around the
+      // active file instead of rendering every entry.
+      const FILMSTRIP_WINDOW = 300;
+      const filmstripOrder = computed(() => {
+        const order = navOrder.value;
+        if (order.length <= FILMSTRIP_WINDOW) return order;
+        const half = Math.floor(FILMSTRIP_WINDOW / 2);
+        const i = Math.max(0, order.indexOf(activePath.value));
+        let start = Math.max(0, i - half);
+        const end = Math.min(order.length, start + FILMSTRIP_WINDOW);
+        start = Math.max(0, end - FILMSTRIP_WINDOW);
+        return order.slice(start, end);
+      });
+
       const activePath = computed(() => state.selection[state.selection.length - 1] || null);
       const activeFile = computed(() => (activePath.value ? state.files.get(activePath.value) : null));
       const activeGroupId = computed(() => (activePath.value ? groupMembership.value.get(activePath.value) : null));
@@ -1442,6 +1462,12 @@
           state.gridThumbs.set(p, '');
         });
       }
+      // Also used by the viewer's filmstrip cells — those must stay on the
+      // cheap async thumbnail path, not previewSrc/get-image-preview, which
+      // shells out to `sips` synchronously (see runSips in main/index.js)
+      // and blocks the whole main process for each call; firing that per
+      // filmstrip cell froze the app on every IPC round-trip afterwards,
+      // including the grid's own get-thumbnail calls when returning to it.
       function gridThumbSrc(p) {
         if (!p) return '';
         const cached = state.gridThumbs.get(p);
@@ -1608,7 +1634,7 @@
         TAGS, tagMeta, extname, basename, stripExt,
         chooseFolder, useDefaultFolder, beginWatch,
         groupMembership, groupById, allFiles, tagCounts, typeCounts, visibleFiles, sortedFiles,
-        gridEntries, renderedEntries, expandedGroupList, navOrder, activePath, activeFile, activeGroupId, systemState, isNew,
+        gridEntries, renderedEntries, expandedGroupList, navOrder, filmstripOrder, activePath, activeFile, activeGroupId, systemState, isNew,
         compareMode, compareGridDims, comparableSelectionCount, openCompareView, exitCompareToSingle,
         gridAreaEl, onGridScroll, tileGridPosition, gridRowHeight, gridTotalRows,
         onTileClick, onGridAreaClick, selectSingle, selectAll, treeAutoExpandDepth, saveSession,
@@ -1982,8 +2008,8 @@
                 </div>
               </div>
               <div class="filmstrip">
-                <div class="filmstrip-cell" v-for="p in navOrder" :key="p" :class="{ comparing: state.comparePaths.includes(p) }" @click="exitCompareToSingle(p)">
-                  <img v-if="state.files.get(p)" :src="previewSrc(p)" />
+                <div class="filmstrip-cell" v-for="p in filmstripOrder" :key="p" :class="{ comparing: state.comparePaths.includes(p) }" @click="exitCompareToSingle(p)">
+                  <img v-if="state.files.get(p)" loading="lazy" :src="gridThumbSrc(p)" />
                 </div>
               </div>
             </div>
@@ -1994,8 +2020,8 @@
                 <img :src="previewSrc(activeFile.path)" :style="{ transform: 'rotate(' + (state.rotations[activeFile.path] || 0) + 'deg)' }" @load="onImageLoad(activeFile, $event)" />
               </div>
               <div class="filmstrip">
-                <div class="filmstrip-cell" v-for="p in navOrder" :key="p" :class="{ current: p === activePath }" @click="selectSingle(p)">
-                  <img v-if="state.files.get(p)" :src="previewSrc(p)" />
+                <div class="filmstrip-cell" v-for="p in filmstripOrder" :key="p" :class="{ current: p === activePath }" @click="selectSingle(p)">
+                  <img v-if="state.files.get(p)" loading="lazy" :src="gridThumbSrc(p)" />
                 </div>
               </div>
             </div>
