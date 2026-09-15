@@ -12,6 +12,7 @@ const db = require('./db');
 const { createWatcher, ensureTracked } = require('./watcher');
 const { stripBuffer } = require('./metadata');
 const thumbnails = require('./thumbnails');
+const PDFDocument = require('pdfkit');
 
 // We're a local file-browsing app, not a web app — no need for Chromium's
 // HTTP disk cache to grow unbounded on disk.
@@ -319,6 +320,27 @@ app.whenReady().then(() => {
   // image-only fs watcher — used to drive the folder tree's expand
   // affordance and the grid's subfolder tiles, which need to reflect real
   // filesystem structure even where there are no (tracked) images.
+  // Backs the "folder has no photos" empty state's note about files
+  // Retriever doesn't read (raw/video/document siblings) — a plain
+  // extension count over the folder's direct, non-image files, independent
+  // of the image-only fs watcher above.
+  const NON_IMAGE_NOTE_EXCLUDE = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff']);
+  ipcMain.handle('list-other-files', async (_event, dir) => {
+    try {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      const counts = {};
+      for (const e of entries) {
+        if (!e.isFile()) continue;
+        const ext = path.extname(e.name).toLowerCase();
+        if (!ext || NON_IMAGE_NOTE_EXCLUDE.has(ext)) continue;
+        counts[ext] = (counts[ext] || 0) + 1;
+      }
+      return Object.entries(counts).map(([ext, count]) => ({ ext, count })).sort((a, b) => b.count - a.count);
+    } catch {
+      return [];
+    }
+  });
+
   ipcMain.handle('list-subfolders', async (_event, dir) => {
     try {
       const entries = await fs.promises.readdir(dir, { withFileTypes: true });
@@ -344,6 +366,116 @@ app.whenReady().then(() => {
   // thumbnails.js. Distinct from get-image-preview above, which produces a
   // much larger (2000px) fit-to-width preview for the full viewer/TIFFs.
   ipcMain.handle('get-thumbnail', (_event, filePath) => thumbnails.getThumbnailPath(filePath));
+
+  // Contact sheet export: draws the selected files directly onto PDF pages
+  // with pdfkit, rather than laying them out as HTML and printing that
+  // through a hidden BrowserWindow's printToPDF. That approach hung
+  // indefinitely on real hardware even with just 3 images and no amount of
+  // window-visibility tweaking (show/opacity/off-screen positioning) fixed
+  // it — see git history — which points at a Chromium/macOS-level issue
+  // with printToPDF on invisible windows, not anything specific to this
+  // app's content. A contact sheet's layout (a fixed grid of images plus a
+  // one-line caption per cell) has no real need for a browser layout
+  // engine, so this sidesteps that whole failure class.
+  ipcMain.handle('export-contact-sheet', async (_event, payload) => {
+    const { pages, pageWidthIn, pageHeightIn, bg, cols, rows, caption, destDir, filenameStem } = payload;
+    const marginPt = 0.4 * 72;
+    const gapPt = 0.08 * 72;
+    const pageWidthPt = pageWidthIn * 72;
+    const pageHeightPt = pageHeightIn * 72;
+
+    const sendProgress = (progress) => {
+      if (!mainWindow.isDestroyed()) mainWindow.webContents.send('export-contact-sheet-progress', progress);
+    };
+
+    // Reuse the same downscaled, disk-cached thumbnails the grid uses
+    // (thumbnails.js) instead of decoding every full-resolution original —
+    // for a whole-directory sheet that's a few hundred KB of already-
+    // generated JPEGs instead of gigabytes of full-res photos. Falls back
+    // to the original path if a thumbnail can't be generated
+    // (getThumbnailPath resolves null rather than rejecting) so a file that
+    // can't be thumbnailed still shows up instead of silently vanishing.
+    const uniquePaths = [...new Set(pages.flat().map((it) => it.path))];
+    const thumbByPath = new Map();
+    let resolved = 0;
+    sendProgress({ stage: 'images', loaded: 0, total: uniquePaths.length });
+    await Promise.all(uniquePaths.map(async (p) => {
+      const thumb = await thumbnails.getThumbnailPath(p);
+      thumbByPath.set(p, thumb || p);
+      resolved += 1;
+      sendProgress({ stage: 'images', loaded: resolved, total: uniquePaths.length });
+    }));
+
+    const defaultName = (filenameStem || 'contact_sheet').replace(/[/\\]/g, '_') + '.pdf';
+    const { canceled, filePath: chosenPath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export contact sheet',
+      defaultPath: path.join(destDir, defaultName),
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (canceled || !chosenPath) return { canceled: true };
+
+    try {
+      sendProgress({ stage: 'rendering' });
+      const capGapPt = 2;
+      const capLineHeightPt = caption.on ? caption.size * 1.2 : 0;
+      const cellWPt = (pageWidthPt - 2 * marginPt - (cols - 1) * gapPt) / cols;
+      const cellHPt = (pageHeightPt - 2 * marginPt - (rows - 1) * gapPt) / rows;
+      const thumbHPt = cellHPt - (caption.on ? capLineHeightPt + capGapPt : 0);
+
+      // pdfkit has no built-in text-overflow ellipsis (the CSS version this
+      // replaces relied on `text-overflow: ellipsis`) — binary-search the
+      // longest prefix that still fits cellWPt, matching that clipped look.
+      const truncateToWidth = (doc, text, maxWidth) => {
+        if (doc.widthOfString(text) <= maxWidth) return text;
+        let lo = 0, hi = text.length;
+        while (lo < hi) {
+          const mid = Math.ceil((lo + hi) / 2);
+          if (doc.widthOfString(text.slice(0, mid) + '…') <= maxWidth) lo = mid; else hi = mid - 1;
+        }
+        return lo > 0 ? text.slice(0, lo) + '…' : '…';
+      };
+
+      await new Promise((resolvePdf, rejectPdf) => {
+        const doc = new PDFDocument({ size: [pageWidthPt, pageHeightPt], margin: 0, autoFirstPage: false });
+        const stream = fs.createWriteStream(chosenPath);
+        stream.on('finish', resolvePdf);
+        stream.on('error', rejectPdf);
+        doc.on('error', rejectPdf);
+        doc.pipe(stream);
+        if (caption.on) doc.font('Courier');
+
+        for (const items of pages) {
+          doc.addPage({ size: [pageWidthPt, pageHeightPt], margin: 0 });
+          try { doc.rect(0, 0, pageWidthPt, pageHeightPt).fill(bg); } catch { /* unparseable custom bg color — leave page white */ }
+          items.forEach((it, i) => {
+            const cellX = marginPt + (i % cols) * (cellWPt + gapPt);
+            const cellY = marginPt + Math.floor(i / cols) * (cellHPt + gapPt);
+            const src = thumbByPath.get(it.path);
+            try {
+              doc.image(src, cellX, cellY, { fit: [cellWPt, thumbHPt], align: 'center', valign: 'center' });
+            } catch {
+              // Unreadable/unsupported image for pdfkit — leave the cell blank rather than aborting the whole export.
+            }
+            if (caption.on) {
+              const name = path.basename(it.path, path.extname(it.path));
+              doc.fontSize(caption.size);
+              try { doc.fillColor(caption.color); } catch { doc.fillColor('#888'); }
+              doc.text(truncateToWidth(doc, name, cellWPt), cellX, cellY + thumbHPt + capGapPt, { width: cellWPt, align: 'center', lineBreak: false });
+            }
+          });
+        }
+        doc.end();
+      });
+
+      sendProgress({ stage: 'writing' });
+      sendProgress({ stage: 'done' });
+      return { path: chosenPath, pages: pages.length };
+    } catch (err) {
+      console.error('[export-contact-sheet] failed', err);
+      sendProgress({ stage: 'error' });
+      throw err;
+    }
+  });
 
   // Remembers open tabs (root folder + current subfolder) across relaunches
   // and, since only one folder is ever actually watched at a time (see

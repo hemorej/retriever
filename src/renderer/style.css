@@ -119,7 +119,7 @@ body {
   border-bottom: 1px solid var(--border-window);
   -webkit-app-region: drag;
 }
-.brand { display: flex; align-items: center; gap: 7px; height: 40px; }
+.brand { display: flex; align-items: center; gap: 7px; height: 30px; }
 .brand-name { font-size: 12px; font-weight: 600; letter-spacing: .2px; color: #b9b6b2; }
 .tabstrip { display: flex; align-items: flex-end; gap: 2px; flex: 1; min-width: 0; -webkit-app-region: no-drag; }
 .tab {
@@ -435,6 +435,54 @@ body {
 .progress-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted-2); font-family: var(--font-mono); }
 .progress-track { height: 3px; background: #2a2a2c; position: relative; }
 .progress-fill { position: absolute; inset: 0; background: var(--accent); transition: right 200ms ease-out; }
+
+/* ---------- contact sheet ---------- */
+.view-switch { display: flex; padding: 2px; gap: 2px; background: var(--bg-well-dark); border: 1px solid var(--border-control); border-radius: 7px; flex: none; }
+.view-switch .opt { height: 24px; padding: 0 10px; display: flex; align-items: center; border-radius: 5px; font-size: 11.5px; font-weight: 600; color: var(--text-muted-2); cursor: pointer; white-space: nowrap; }
+.view-switch .opt.active { background: var(--accent); color: var(--accent-on-fill); }
+
+.sheet-preview { flex: 1; min-width: 0; background: var(--bg-viewer); padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; overflow: auto; }
+.sheet-page { width: 380px; box-shadow: 0 22px 60px -22px rgba(0, 0, 0, .95); padding: 18px; box-sizing: border-box; flex: none; }
+.sheet-grid { width: 100%; height: 100%; display: grid; gap: 7px; }
+.sheet-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 2px; }
+.sheet-cell-thumb { flex: 1; min-height: 0; box-sizing: border-box; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.sheet-cell-thumb img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+.sheet-cap { font-family: 'Fira Mono', monospace; font-size: 6.5px; line-height: 1.2; color: #b5b2af; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-paginator { display: flex; align-items: center; gap: 12px; font-size: 11px; font-family: var(--font-mono); color: var(--text-label-2); flex: none; }
+.pg-btn { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; background: var(--bg-control); cursor: pointer; color: var(--text-secondary); }
+.pg-btn.disabled { background: var(--bg-raised); color: var(--text-label); cursor: default; pointer-events: none; }
+.pg-num { width: 26px; height: 19px; text-align: center; background: var(--bg-well-dark); border: 1px solid var(--border-control); border-radius: 4px; color: var(--text-primary); font: inherit; }
+
+.sheet-controls { width: 274px; flex: none; background: var(--bg-rail); border-left: 1px solid var(--border-window); display: flex; flex-direction: column; overflow-y: auto; }
+.ctrl-section { padding: 12px 14px; border-bottom: 1px solid var(--border-hairline); display: flex; flex-direction: column; gap: 8px; }
+.ctrl-section:last-child { border-bottom: none; }
+.seg-control { display: flex; padding: 2px; gap: 2px; background: var(--bg-well-dark); border: 1px solid var(--border-control); border-radius: 6px; }
+.seg-opt { flex: 1; text-align: center; padding: 4px 0; border-radius: 4px; font-size: 11px; color: var(--text-muted-2); cursor: pointer; }
+.seg-opt.active { background: var(--bg-control); color: var(--text-primary); }
+.custom-dims { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+.swatch-row { display: flex; align-items: center; gap: 6px; }
+.color-swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--border-control); cursor: pointer; flex: none; }
+.color-swatch.active { box-shadow: 0 0 0 2px var(--accent); }
+.ctrl-geometry { font-size: 10px; color: var(--text-dim-2); font-family: var(--font-mono); }
+.ctrl-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); }
+.export-field { display: flex; align-items: center; height: 28px; padding: 0 9px; border-radius: 6px; background: var(--bg-well-dark); border: 1px solid var(--accent); }
+.export-field input { flex: 1; background: transparent; border: none; outline: none; color: var(--text-primary); font: 11px 'Fira Mono', monospace; }
+.export-field .ext { color: var(--text-dim); font-family: var(--font-mono); font-size: 11px; }
+.export-facts { font-size: 10px; color: var(--text-dim-2); font-family: var(--font-mono); }
+.btn-accent-block.disabled { opacity: 0.7; cursor: default; }
+.export-progress { height: 4px; border-radius: 2px; background: var(--bg-well-dark); overflow: hidden; }
+.export-progress-bar { height: 100%; background: var(--accent); transition: width 0.2s ease; }
+
+.sheet-filmstrip { height: 150px; flex: none; background: var(--bg-rail); border-top: 1px solid var(--border-window); display: flex; flex-direction: column; }
+.sf-head { height: 28px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 14px; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); border-bottom: 1px solid var(--border-hairline); }
+.sf-head .push { margin-left: auto; display: flex; gap: 10px; }
+.sf-action { color: var(--accent-text); cursor: pointer; }
+.sf-row { flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 14px; overflow-x: auto; }
+.sf-cell { width: 96px; flex: none; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+.sf-thumb { height: 66px; border-radius: 3px; background: var(--bg-well); box-sizing: border-box; padding: 3px; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 0 0 1px #2a2a2c; }
+.sf-thumb img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+.sf-cell.selected .sf-thumb { box-shadow: 0 0 0 2px var(--accent); }
+.sf-name { font-size: 9.5px; font-family: 'Fira Mono', monospace; color: var(--text-muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- app icon ---------- */
 .dog-mark path.head { fill: #c9a24d; }

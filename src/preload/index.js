@@ -24,13 +24,20 @@ contextBridge.exposeInMainWorld('retriever', {
   stripMetadata: (filePaths, options) => ipcRenderer.invoke('strip-metadata', { filePaths, options }),
   openInExternalEditor: (filePath) => ipcRenderer.invoke('open-in-external-editor', filePath),
   listSubfolders: (dir) => ipcRenderer.invoke('list-subfolders', dir),
+  listOtherFiles: (dir) => ipcRenderer.invoke('list-other-files', dir),
   getImagePreview: (filePath) => ipcRenderer.invoke('get-image-preview', filePath),
   getThumbnail: (filePath) => ipcRenderer.invoke('get-thumbnail', filePath),
+  exportContactSheet: (payload) => ipcRenderer.invoke('export-contact-sheet', payload),
   loadSession: () => ipcRenderer.invoke('load-session'),
   saveSession: (session) => ipcRenderer.invoke('save-session', session),
   onFsEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('fs-event', listener);
     return () => ipcRenderer.removeListener('fs-event', listener);
+  },
+  onExportContactSheetProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('export-contact-sheet-progress', listener);
+    return () => ipcRenderer.removeListener('export-contact-sheet-progress', listener);
   },
 });

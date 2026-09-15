@@ -50,6 +50,15 @@
   const TAG_BY_KEY = { 1: 'select', 2: 'reject', 3: 'maybe', 4: 'published' };
   // Sort a folder falls back to when the user has never explicitly sorted it.
   const DEFAULT_SORT = { mode: 'date', dir: 'desc' };
+  // Contact-sheet layout/export settings are per-tab (README: "remembered
+  // per tab"), so each tab gets its own copy rather than one shared object.
+  function defaultSheet() {
+    return {
+      selected: [], pageSize: 'letter', orientation: 'portrait', customW: 8.5, customH: 11,
+      bg: '#1b1b1c', thumbSize: 110, captionOn: true, captionSize: 6, captionFace: 'fira', captionColor: '#b5b2af',
+      page: 1, filenameStem: null, onlyTaggedSelect: false, includeSubfolders: false,
+    };
+  }
   function tagMeta(name) { return TAGS.find((t) => t.name === name) || { className: '', var: '#888' }; }
 
   // ---------- small shared components ----------
@@ -464,7 +473,7 @@
           { label: 'Navigate', rows: [
             ['↑ ↓ ← →', 'move selection'], ['↵', 'open fit-width'], ['esc', 'back to grid'],
             ['⌘T', 'new tab'], ['⌘1–9', 'go to tab'], ['⌘⌥←', 'parent folder'],
-            ['⌘F', 'search filenames'], ['⌘L', 'filter panel'], ['P', 'compare selected images (2–6)'],
+            ['⌘F', 'search filenames'], ['⌘L', 'filter panel'], ['P', 'compare selected images (2–6)'], ['⌘⇧C', 'contact sheet / browse'],
           ]},
           { label: 'Select & group', rows: [
             ['⌘A', 'select all'], ['⇧click', 'extend'], ['⌘click', 'add / remove'],
@@ -512,7 +521,7 @@
     components: { AppMark, Toast, ContextMenu, FolderContextMenu, RenameDialog, ConfirmDialog, TagMenu, FilterPanel, MassRenameDialog, CleanupDialog, ShortcutsSheet },
     setup() {
       const state = reactive({
-        tabs: [{ id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', expandedFolders: null }],
+        tabs: [{ id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', expandedFolders: null, sheet: defaultSheet() }],
         activeTabId: null,
         files: reactive(new Map()),
         groups: [],
@@ -550,6 +559,7 @@
         inlineRenamePath: null,
         inlineRenameValue: '',
         indexing: reactive({ active: false, seen: 0 }),
+        sheetExport: reactive({ active: false, stage: '', loaded: 0, total: 0 }),
         permissionDenied: reactive({ active: false, path: '', message: '' }),
         receipt: reactive({ line1: 'fsevents · —', line2: '', amber: false }),
         toastMessage: '',
@@ -725,6 +735,9 @@
         }
       }
       window.retriever.onFsEvent(queueFsEvent);
+      window.retriever.onExportContactSheetProgress((progress) => {
+        Object.assign(state.sheetExport, progress);
+      });
 
       async function beginWatch(rootDir) {
         eventQueue = [];
@@ -747,6 +760,7 @@
         tab.expandedFolders = null;
         tab.watching = true;
         tab.label = basename(rootDir) || rootDir;
+        tab.sheet = defaultSheet();
         selectFolder(rootDir);
         hydrateTags();
       }
@@ -1216,6 +1230,130 @@
       }
       function exitCompareToSingle(p) { state.comparePaths.length = 0; selectSingle(p); }
 
+      // ---------- contact sheet ----------
+      // A peer view of Browse (not a dialog) that replaces the grid in the
+      // same tab and lays the current folder's files onto printable pages.
+      // Settings live on the tab object itself (tab.sheet) so they're
+      // remembered per tab, per the design doc, without a separate store.
+      const PAGE_SIZES_IN = { letter: { w: 8.5, h: 11 }, a4: { w: 8.27, h: 11.69 } };
+      function sheetPageDims(sheet) {
+        const base = sheet.pageSize === 'custom' ? { w: sheet.customW, h: sheet.customH } : PAGE_SIZES_IN[sheet.pageSize];
+        return sheet.orientation === 'landscape' ? { w: base.h, h: base.w } : { w: base.w, h: base.h };
+      }
+      // The thumbnail-size slider is the only layout control (per the design
+      // doc): it sets a target cell size in inches, and columns/rows are
+      // whatever fit that cell into the page box, with spacing distributed
+      // by the gap term below rather than tracked separately.
+      function sheetGridDims(sheet) {
+        const { w, h } = sheetPageDims(sheet);
+        const margin = 0.4, gap = 0.08;
+        const usableW = Math.max(0.5, w - margin * 2);
+        const usableH = Math.max(0.5, h - margin * 2);
+        const cellW = 0.75 + ((sheet.thumbSize - 60) / 160) * 1.5;
+        const cellH = cellW * (sheet.captionOn ? 1.25 : 1);
+        const cols = Math.max(1, Math.round((usableW + gap) / (cellW + gap)));
+        const rows = Math.max(1, Math.round((usableH + gap) / (cellH + gap)));
+        return { cols, rows, cellW, cellH };
+      }
+      const sheetSourceFiles = computed(() => {
+        const sheet = activeTab.value.sheet;
+        if (!state.folderFilter) return [];
+        let list = allFiles.value.filter((f) => f.dir === state.folderFilter ||
+          (sheet.includeSubfolders && f.dir.startsWith(state.folderFilter + '/')));
+        if (sheet.onlyTaggedSelect) list = list.filter((f) => f.tags.includes('select'));
+        return list;
+      });
+      const sheetGrid = computed(() => sheetGridDims(activeTab.value.sheet));
+      const sheetDims = computed(() => sheetPageDims(activeTab.value.sheet));
+      const sheetPerPage = computed(() => sheetGrid.value.cols * sheetGrid.value.rows);
+      const sheetPages = computed(() => {
+        const per = sheetPerPage.value;
+        const sel = activeTab.value.sheet.selected.filter((p) => state.files.has(p));
+        const pages = [];
+        for (let i = 0; i < sel.length; i += per) pages.push(sel.slice(i, i + per));
+        return pages.length ? pages : [[]];
+      });
+      const sheetFilenameStem = computed(() => {
+        const sheet = activeTab.value.sheet;
+        if (sheet.filenameStem) return sheet.filenameStem;
+        const folderName = basename(state.folderFilter || activeTab.value.rootDir || 'sheet');
+        return folderName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') + '_sheet';
+      });
+      const sheetCurrentPageFiles = computed(() => {
+        const sheet = activeTab.value.sheet;
+        const page = sheetPages.value[Math.min(sheet.page, sheetPages.value.length) - 1] || [];
+        return page.map((p) => state.files.get(p)).filter(Boolean);
+      });
+      function switchToSheet() {
+        if (!activeTab.value.rootDir) return;
+        state.viewMode = 'sheet';
+        state.comparePaths.length = 0;
+        const sheet = activeTab.value.sheet;
+        if (!sheet.selected.length) sheet.selected = sheetSourceFiles.value.map((f) => f.path);
+      }
+      function switchToBrowse() { state.viewMode = 'grid'; }
+      function toggleSheetView() { state.viewMode === 'sheet' ? switchToBrowse() : switchToSheet(); }
+      function toggleSheetSelect(e, p) {
+        const sheet = activeTab.value.sheet;
+        const i = sheet.selected.indexOf(p);
+        if (e && e.shiftKey && sheet.selected.length) {
+          const order = sheetSourceFiles.value.map((f) => f.path);
+          const last = sheet.selected[sheet.selected.length - 1];
+          const a = order.indexOf(last), b = order.indexOf(p);
+          if (a !== -1 && b !== -1) {
+            const [lo, hi] = a < b ? [a, b] : [b, a];
+            for (const q of order.slice(lo, hi + 1)) if (!sheet.selected.includes(q)) sheet.selected.push(q);
+            return;
+          }
+        }
+        if (i === -1) sheet.selected.push(p); else sheet.selected.splice(i, 1);
+      }
+      function selectAllSheetSource() { activeTab.value.sheet.selected = sheetSourceFiles.value.map((f) => f.path); }
+      function clearSheetSelection() { activeTab.value.sheet.selected = []; }
+      function resetSheetLayout() {
+        const sheet = activeTab.value.sheet;
+        const selected = sheet.selected;
+        activeTab.value.sheet = Object.assign(defaultSheet(), { selected });
+      }
+      function sheetStepPage(delta) {
+        const sheet = activeTab.value.sheet;
+        sheet.page = Math.min(Math.max(1, sheet.page + delta), sheetPages.value.length);
+      }
+      async function exportContactSheet() {
+        const sheet = activeTab.value.sheet;
+        if (!sheet.selected.length) { toast('Select at least one image for the sheet.'); return; }
+        const { w, h } = sheetPageDims(sheet);
+        const grid = sheetGrid.value;
+        const pages = sheetPages.value.map((pg) => pg.map((p) => ({ path: p })));
+        const destDir = state.folderFilter || activeTab.value.rootDir;
+        Object.assign(state.sheetExport, { active: true, stage: 'images', loaded: 0, total: 0 });
+        try {
+          const result = await window.retriever.exportContactSheet({
+            pages, pageWidthIn: w, pageHeightIn: h, bg: sheet.bg, cols: grid.cols, rows: grid.rows,
+            caption: { on: sheet.captionOn, size: sheet.captionSize, color: sheet.captionColor },
+            destDir, filenameStem: sheetFilenameStem.value,
+          });
+          if (result.canceled) return;
+          toast(`Exported ${result.pages} page${result.pages === 1 ? '' : 's'} to ${shortenPath(result.path)}`);
+        } catch (e) { toast(e.message); } finally {
+          state.sheetExport.active = false;
+        }
+      }
+      const sheetExportLabel = computed(() => {
+        const ex = state.sheetExport;
+        if (ex.stage === 'images') return ex.total ? `Preparing thumbnails… ${ex.loaded}/${ex.total}` : 'Preparing thumbnails…';
+        if (ex.stage === 'rendering') return 'Rendering PDF…';
+        if (ex.stage === 'writing') return 'Writing file…';
+        return 'Exporting…';
+      });
+      const sheetExportPct = computed(() => {
+        const ex = state.sheetExport;
+        if (ex.stage === 'images') return ex.total ? Math.round((ex.loaded / ex.total) * 80) : 0;
+        if (ex.stage === 'rendering') return 90;
+        if (ex.stage === 'writing') return 97;
+        return 0;
+      });
+
       // ---------- file info (lazy) ----------
       async function ensureFileInfo(f) {
         if (!f || f.info || f.lost) return;
@@ -1288,7 +1426,7 @@
         saveSession();
       }
       function addTab() {
-        const t = { id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', folderFilter: null, expandedFolders: null };
+        const t = { id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', folderFilter: null, expandedFolders: null, sheet: defaultSheet() };
         state.tabs.push(t);
         state.activeTabId = t.id;
         saveSession();
@@ -1348,6 +1486,7 @@
           id: uid('tab'), rootDir: t.rootDir || null, watching: false,
           label: t.label || 'Untitled', folderFilter: t.folderFilter || t.rootDir || null,
           expandedFolders: Array.isArray(t.expandedFolders) ? t.expandedFolders : null,
+          sheet: defaultSheet(),
         }));
         const active = state.tabs[session.activeIndex] || state.tabs[0];
         state.activeTabId = active.id;
@@ -1398,6 +1537,25 @@
           state.subfoldersCache.set(dir, []);
         }
       }
+      // Feeds the "folder has no photos" empty state's note about
+      // non-image siblings (raw/video/document files Retriever doesn't
+      // read) — fetched alongside the subfolder listing whenever the
+      // selected folder changes.
+      const otherFilesCache = reactive(new Map());
+      async function loadOtherFiles(dir) {
+        if (otherFilesCache.has(dir)) return;
+        otherFilesCache.set(dir, null);
+        try {
+          otherFilesCache.set(dir, await window.retriever.listOtherFiles(dir));
+        } catch {
+          otherFilesCache.set(dir, []);
+        }
+      }
+      const otherFilesNote = computed(() => {
+        const list = (state.folderFilter && otherFilesCache.get(state.folderFilter)) || [];
+        if (!list.length) return '';
+        return list.map((o) => `${o.count} ${o.ext.slice(1).toUpperCase()}`).join(', ');
+      });
       // Per-folder sort memory: restore the sort last chosen for this folder
       // (default date/desc if it's never been sorted). The keydown/chip
       // handlers only mutate state.sortMode/sortDir; a watch in onMounted
@@ -1416,6 +1574,7 @@
         }
         saveSession();
         loadSubfolders(p);
+        loadOtherFiles(p);
         // Auto-expand the selected folder and all of its ancestors so the
         // tree reveals its subdirs immediately.
         const root = activeTab.value.rootDir;
@@ -1517,6 +1676,7 @@
           else if (state.filterPanelOpen) state.filterPanelOpen = false;
           else if (state.comparePaths.length) state.comparePaths.length = 0;
           else if (state.viewMode === 'viewer') backToGrid();
+          else if (state.viewMode === 'sheet') switchToBrowse();
           else if (state.selection.length) state.selection = [];
           return;
         }
@@ -1540,6 +1700,7 @@
         if (e.metaKey && e.key.toLowerCase() === 'f') { e.preventDefault(); nextTick(() => document.getElementById('search-input')?.focus()); return; }
         if (e.metaKey && e.key.toLowerCase() === 'l') { e.preventDefault(); state.filterPanelOpen = !state.filterPanelOpen; return; }
         if (e.metaKey && e.key.toLowerCase() === 't') { e.preventDefault(); addTab(); return; }
+        if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); toggleSheetView(); return; }
         if (e.metaKey && e.key === 'g' && e.shiftKey) { e.preventDefault(); if (activeGroupId.value) ungroup(activeGroupId.value); return; }
         if (e.metaKey && e.altKey && e.key.toLowerCase() === 'g') { e.preventDefault(); if (activeGroupId.value) addSelectionToGroup(activeGroupId.value); return; }
         if (e.metaKey && e.key === 'g') { e.preventDefault(); groupSelection(); return; }
@@ -1608,6 +1769,14 @@
           state.folderSorts.set(p, { mode: state.sortMode, dir: state.sortDir });
           saveSession();
         });
+        // Changing page size, orientation or thumbnail size re-derives the
+        // grid and re-paginates, which can leave the current page number
+        // past the new last page — clamp it back in range.
+        watch(() => sheetPages.value.length, (len) => {
+          const sheet = activeTab.value.sheet;
+          if (sheet.page > len) sheet.page = len;
+          if (sheet.page < 1) sheet.page = 1;
+        });
       });
       onUnmounted(() => {
         window.removeEventListener('keydown', onKeydown);
@@ -1629,6 +1798,20 @@
         window.addEventListener('mouseup', up);
       }
 
+      function onSheetSliderPointerDown(e) {
+        const track = e.currentTarget;
+        const sheet = activeTab.value.sheet;
+        function move(ev) {
+          const rect = track.getBoundingClientRect();
+          const pct = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+          sheet.thumbSize = Math.round(60 + pct * (220 - 60));
+        }
+        move(e);
+        function up() { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); }
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+      }
+
       return {
         state, activeTab, watchingCount, shortenPath, fileUrl, fmtBytes, fmtDate, fmtElapsed,
         TAGS, tagMeta, extname, basename, stripExt,
@@ -1636,6 +1819,9 @@
         groupMembership, groupById, allFiles, tagCounts, typeCounts, visibleFiles, sortedFiles,
         gridEntries, renderedEntries, expandedGroupList, navOrder, filmstripOrder, activePath, activeFile, activeGroupId, systemState, isNew,
         compareMode, compareGridDims, comparableSelectionCount, openCompareView, exitCompareToSingle,
+        sheetSourceFiles, sheetGrid, sheetDims, sheetPerPage, sheetPages, sheetFilenameStem, sheetCurrentPageFiles,
+        switchToSheet, switchToBrowse, toggleSheetView, toggleSheetSelect, selectAllSheetSource,
+        clearSheetSelection, resetSheetLayout, sheetStepPage, exportContactSheet, sheetExportLabel, sheetExportPct,
         gridAreaEl, onGridScroll, tileGridPosition, gridRowHeight, gridTotalRows,
         onTileClick, onGridAreaClick, selectSingle, selectAll, treeAutoExpandDepth, saveSession,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
@@ -1646,8 +1832,8 @@
         openFileContextMenu, handleContextAction, confirmFileDelete, commitFileDelete,
         openFolderContextMenu, handleFolderContextAction, commitFolderRename, commitFolderDelete,
         openViewer, backToGrid, stepViewer, ensureFileInfo,
-        selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders, previewSrc, gridThumbSrc,
-        undo, onSliderPointerDown, toast, onImageLoad,
+        selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders, otherFilesNote, previewSrc, gridThumbSrc,
+        undo, onSliderPointerDown, onSheetSliderPointerDown, toast, onImageLoad,
       };
     },
     template: `
@@ -1672,6 +1858,11 @@
       <!-- GRID MODE -->
       <template v-if="state.viewMode === 'grid'">
         <div class="toolbar">
+          <div class="view-switch">
+            <span class="opt active" @click="switchToBrowse">Browse</span>
+            <span class="opt" @click="switchToSheet">Contact Sheet</span>
+          </div>
+          <div class="vdivider"></div>
           <div class="breadcrumb">
             <template v-if="activeTab.rootDir">
               <template v-for="(seg, i) in shortenPath(activeTab.rootDir).split('/').filter(Boolean)" :key="i">
@@ -1787,7 +1978,7 @@
                 <div class="state-caption">Folder has no photos</div>
                 <div class="state-body">
                   <div class="state-title">Nothing here yet</div>
-                  <div class="state-copy">This folder doesn't hold any photos Retriever reads yet.</div>
+                  <div class="state-copy">This folder doesn't hold any photos Retriever reads yet.<template v-if="otherFilesNote"> It has {{ otherFilesNote }} — files Retriever doesn't read.</template></div>
                   <div class="state-live-line"><span style="width:6px;height:6px;border-radius:50%;background:#7ac47a;display:inline-block"></span>watching — drop files in and they appear</div>
                   <div class="drop-target-full">drop photos here</div>
                 </div>
@@ -1945,7 +2136,7 @@
       </template>
 
       <!-- VIEWER MODE -->
-      <template v-else>
+      <template v-else-if="state.viewMode === 'viewer'">
         <div class="toolbar">
           <div class="chip" @click="backToGrid">← Back to grid <span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">esc</span></div>
           <div class="vdivider"></div>
@@ -2056,6 +2247,154 @@
           <span v-else>{{ navOrder.indexOf(activePath) + 1 }} of {{ navOrder.length }}</span>
           <span class="live"><span class="live-dot"></span>live</span>
           <span>⌘/ shortcuts</span>
+        </div>
+      </template>
+
+      <!-- CONTACT SHEET MODE -->
+      <template v-else-if="state.viewMode === 'sheet'">
+        <div class="toolbar">
+          <div class="view-switch">
+            <span class="opt" @click="switchToBrowse">Browse</span>
+            <span class="opt active" @click="switchToSheet">Contact Sheet</span>
+          </div>
+          <div class="vdivider"></div>
+          <div class="breadcrumb">
+            <template v-for="(seg, i) in shortenPath(state.folderFilter || activeTab.rootDir).split('/').filter(Boolean)" :key="i">
+              <span class="sep" v-if="i > 0">/</span><span>{{ seg }}</span>
+            </template>
+          </div>
+          <div class="spacer"></div>
+          <span style="font-size:11px;color:#6e6b68;font-family:'Geist Mono',ui-monospace,monospace;white-space:nowrap">{{ activeTab.sheet.selected.length }} of {{ sheetSourceFiles.length }} on sheet · {{ sheetPages.length }} page{{ sheetPages.length === 1 ? '' : 's' }}</span>
+          <div class="chip" @click="resetSheetLayout">Reset layout</div>
+        </div>
+
+        <div class="body-split">
+          <div class="tree" style="width:208px">
+            <div class="tree-label">Source folder</div>
+            <div class="tree-rows" v-if="folderTree">
+              <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir"
+                         :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" :auto-expand-depth="treeAutoExpandDepth"
+                         :persist-expansion="saveSession" @select="selectFolder"></tree-node>
+            </div>
+            <div class="tree-label">Include</div>
+            <div class="tree-rows">
+              <div class="fp-check-row compact" @click="activeTab.sheet.onlyTaggedSelect = !activeTab.sheet.onlyTaggedSelect">
+                <span class="checkbox" :class="{ checked: activeTab.sheet.onlyTaggedSelect }">✓</span>
+                Only tagged <span style="color:var(--accent-text)">select</span>
+              </div>
+              <div class="fp-check-row compact" @click="activeTab.sheet.includeSubfolders = !activeTab.sheet.includeSubfolders">
+                <span class="checkbox" :class="{ checked: activeTab.sheet.includeSubfolders }">✓</span>Subfolders
+              </div>
+            </div>
+            <div class="tree-receipt">
+              <div>{{ sheetSourceFiles.length }} images</div>
+              <div class="delta">thumbs cached</div>
+            </div>
+          </div>
+
+          <div class="sheet-preview">
+            <div class="sheet-page" :style="{ aspectRatio: sheetDims.w + ' / ' + sheetDims.h, background: activeTab.sheet.bg }">
+              <div class="sheet-grid" :style="{ gridTemplateColumns: 'repeat(' + sheetGrid.cols + ', 1fr)', gridTemplateRows: 'repeat(' + sheetGrid.rows + ', 1fr)' }">
+                <div class="sheet-cell" v-for="f in sheetCurrentPageFiles" :key="f.path">
+                  <div class="sheet-cell-thumb"><img :src="gridThumbSrc(f.path)" /></div>
+                  <div class="sheet-cap" v-if="activeTab.sheet.captionOn" :style="{ color: activeTab.sheet.captionColor }">{{ stripExt(f.name) }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="sheet-paginator">
+              <div class="pg-btn" :class="{ disabled: activeTab.sheet.page <= 1 }" @click="sheetStepPage(-1)">‹</div>
+              <span>Page <input class="pg-num" :value="activeTab.sheet.page" @change="activeTab.sheet.page = Math.min(Math.max(1, Number($event.target.value) || 1), sheetPages.length)" /> of {{ sheetPages.length }}</span>
+              <span class="pg-info">{{ sheetPerPage }} per page · {{ sheetCurrentPageFiles.length }} on page {{ activeTab.sheet.page }}</span>
+              <div class="pg-btn" :class="{ disabled: activeTab.sheet.page >= sheetPages.length }" @click="sheetStepPage(1)">›</div>
+            </div>
+          </div>
+
+          <div class="sheet-controls">
+            <div class="ctrl-section">
+              <div class="fp-section-label">Page</div>
+              <div class="seg-control">
+                <span class="seg-opt" :class="{ active: activeTab.sheet.pageSize === 'letter' }" @click="activeTab.sheet.pageSize = 'letter'">8.5 × 11</span>
+                <span class="seg-opt" :class="{ active: activeTab.sheet.pageSize === 'a4' }" @click="activeTab.sheet.pageSize = 'a4'">A4</span>
+                <span class="seg-opt" :class="{ active: activeTab.sheet.pageSize === 'custom' }" @click="activeTab.sheet.pageSize = 'custom'">Custom</span>
+              </div>
+              <div class="custom-dims" v-if="activeTab.sheet.pageSize === 'custom'">
+                <input class="res-field" v-model.number="activeTab.sheet.customW" style="width:48px" /><span>×</span>
+                <input class="res-field" v-model.number="activeTab.sheet.customH" style="width:48px" /><span>in</span>
+              </div>
+              <div class="seg-control" style="margin-top:8px">
+                <span class="seg-opt" :class="{ active: activeTab.sheet.orientation === 'portrait' }" @click="activeTab.sheet.orientation = 'portrait'">Vertical</span>
+                <span class="seg-opt" :class="{ active: activeTab.sheet.orientation === 'landscape' }" @click="activeTab.sheet.orientation = 'landscape'">Horizontal</span>
+              </div>
+              <div class="swatch-row">
+                <span class="color-swatch" v-for="c in ['#1b1b1c','#0a0a0b','#8f8c89','#f0eeec']" :key="c" :style="{ background: c }" :class="{ active: activeTab.sheet.bg === c }" @click="activeTab.sheet.bg = c"></span>
+                <input class="res-field" v-model="activeTab.sheet.bg" style="width:70px;font-family:'Geist Mono',ui-monospace,monospace" />
+              </div>
+            </div>
+            <div class="ctrl-section">
+              <div class="fp-section-label">Grid <span style="float:right;font-family:'Geist Mono',ui-monospace,monospace;color:var(--text-muted)">{{ sheetGrid.cols }} × {{ sheetGrid.rows }}</span></div>
+              <div class="size-slider-group">
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="#6e6b68" @click="activeTab.sheet.thumbSize = 60"><rect x="0" y="0" width="5" height="5"/><rect x="7" y="0" width="5" height="5"/><rect x="0" y="7" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/></svg>
+                <div class="size-slider" @mousedown="onSheetSliderPointerDown">
+                  <div class="fill" :style="{ width: (((activeTab.sheet.thumbSize - 60) / 160) * 100) + '%' }"></div>
+                  <div class="knob" :style="{ left: (((activeTab.sheet.thumbSize - 60) / 160) * 100) + '%' }"></div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="#6e6b68" @click="activeTab.sheet.thumbSize = 220"><rect x="0" y="0" width="14" height="14"/></svg>
+              </div>
+              <div class="ctrl-geometry">cell {{ sheetGrid.cellW.toFixed(2) }} × {{ sheetGrid.cellH.toFixed(2) }} in · spacing auto</div>
+            </div>
+            <div class="ctrl-section">
+              <div class="fp-section-label">Caption</div>
+              <div class="fp-check-row compact" @click="activeTab.sheet.captionOn = !activeTab.sheet.captionOn">
+                <span class="checkbox" :class="{ checked: activeTab.sheet.captionOn }">✓</span>Filename under thumbnail
+              </div>
+              <div class="ctrl-row">
+                <span style="width:62px;flex:none">Text size</span>
+                <input type="range" min="6" max="14" v-model.number="activeTab.sheet.captionSize" style="flex:1" />
+                <span style="font-family:'Geist Mono',ui-monospace,monospace">{{ activeTab.sheet.captionSize }} pt</span>
+              </div>
+              <div class="ctrl-row">
+                <span style="width:62px;flex:none">Type</span>
+                <select v-model="activeTab.sheet.captionFace" style="background:#232325;color:#e6e4e2;border:none;border-radius:4px;flex:1;font:inherit">
+                  <option value="fira">Fira Mono</option>
+                  <option value="mono">Geist Mono</option>
+                </select>
+                <span class="color-swatch" :style="{ background: activeTab.sheet.captionColor }"></span>
+              </div>
+            </div>
+            <div class="ctrl-section">
+              <div class="fp-section-label">Export</div>
+              <div class="export-field">
+                <input v-model="activeTab.sheet.filenameStem" :placeholder="sheetFilenameStem" />
+                <span class="ext">.pdf</span>
+              </div>
+              <div class="export-facts">{{ shortenPath(state.folderFilter || activeTab.rootDir) }} · {{ sheetPages.length }} page{{ sheetPages.length === 1 ? '' : 's' }} · 300 ppi</div>
+              <div class="btn-accent-block" :class="{ disabled: state.sheetExport.active }" @click="!state.sheetExport.active && exportContactSheet()">
+                {{ state.sheetExport.active ? sheetExportLabel : 'Export to PDF' }}
+              </div>
+              <div class="export-progress" v-if="state.sheetExport.active">
+                <div class="export-progress-bar" :style="{ width: sheetExportPct + '%' }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sheet-filmstrip">
+          <div class="sf-head">
+            <span>{{ basename(state.folderFilter || activeTab.rootDir) }}</span>
+            <span>{{ sheetSourceFiles.length }} files · {{ activeTab.sheet.selected.length }} selected</span>
+            <span class="push"><span class="sf-action" @click="selectAllSheetSource">Select all</span><span class="sf-action" @click="clearSheetSelection">Clear</span></span>
+          </div>
+          <div class="sf-row">
+            <div class="sf-cell" v-for="f in sheetSourceFiles" :key="f.path" :class="{ selected: activeTab.sheet.selected.includes(f.path) }" @click="toggleSheetSelect($event, f.path)">
+              <div class="sf-thumb"><img :src="gridThumbSrc(f.path)" /></div>
+              <div class="sf-name">{{ f.name }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="statusbar">
+          <span>contact sheet · {{ sheetSourceFiles.length }} images · page {{ activeTab.sheet.page }} of {{ sheetPages.length }}</span>
+          <span class="live"><span class="live-dot"></span>⌘⇧C browse</span>
         </div>
       </template>
 
