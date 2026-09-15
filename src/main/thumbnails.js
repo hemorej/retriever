@@ -15,8 +15,8 @@ let cacheDir = null;
 // would defeat the point of never touching untagged files' bytes. A file
 // edited in place gets a new key (new mtime/size); stale entries are swept
 // by prunePastAge() below rather than tracked/deleted precisely.
-function cacheKeyFor(filePath, size, mtimeMs) {
-  return crypto.createHash('sha1').update(`${filePath}:${size}:${mtimeMs}`).digest('hex');
+function cacheKeyFor(filePath, size, mtimeMs, maxDimension, quality) {
+  return crypto.createHash('sha1').update(`${filePath}:${size}:${mtimeMs}:${maxDimension}:${quality}`).digest('hex');
 }
 
 function prunePastAge() {
@@ -99,14 +99,18 @@ function shutdownThumbnailWorkers() {
 // immediately if already generated, otherwise once the worker pool finishes
 // generating it. Resolves to null (not a rejection) on generation failure,
 // so callers can treat "no thumbnail" uniformly without a catch.
-function getThumbnailPath(filePath) {
+// `maxDimension`/`quality` default to the grid tile's own settings — the PDF
+// export (main/index.js) passes a larger, per-sheet size instead, which
+// lands under its own cache key (see cacheKeyFor) rather than colliding with
+// or overwriting the grid's cached 440px copy of the same file.
+function getThumbnailPath(filePath, { maxDimension = THUMB_MAX_DIMENSION, quality = 'normal' } = {}) {
   let st;
   try {
     st = fs.statSync(filePath);
   } catch {
     return Promise.resolve(null);
   }
-  const key = cacheKeyFor(filePath, st.size, Math.round(st.mtimeMs));
+  const key = cacheKeyFor(filePath, st.size, Math.round(st.mtimeMs), maxDimension, quality);
   const dest = path.join(cacheDir, `${key}.jpg`);
 
   if (fs.existsSync(dest)) return Promise.resolve(dest);
@@ -121,10 +125,10 @@ function getThumbnailPath(filePath) {
   }).finally(() => pending.delete(key));
 
   pending.set(key, promise);
-  jobQueue.push({ id, src: filePath, dest, maxDimension: THUMB_MAX_DIMENSION });
+  jobQueue.push({ id, src: filePath, dest, maxDimension, quality });
   pump();
 
   return promise;
 }
 
-module.exports = { initThumbnailCache, getThumbnailPath, shutdownThumbnailWorkers };
+module.exports = { initThumbnailCache, getThumbnailPath, shutdownThumbnailWorkers, THUMB_MAX_DIMENSION };

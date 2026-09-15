@@ -388,19 +388,36 @@ app.whenReady().then(() => {
       if (!mainWindow.isDestroyed()) mainWindow.webContents.send('export-contact-sheet-progress', progress);
     };
 
-    // Reuse the same downscaled, disk-cached thumbnails the grid uses
-    // (thumbnails.js) instead of decoding every full-resolution original —
-    // for a whole-directory sheet that's a few hundred KB of already-
-    // generated JPEGs instead of gigabytes of full-res photos. Falls back
-    // to the original path if a thumbnail can't be generated
+    const capGapPt = 2;
+    const capLineHeightPt = caption.on ? caption.size * 1.2 : 0;
+    const cellWPt = (pageWidthPt - 2 * marginPt - (cols - 1) * gapPt) / cols;
+    const cellHPt = (pageHeightPt - 2 * marginPt - (rows - 1) * gapPt) / rows;
+    const thumbHPt = cellHPt - (caption.on ? capLineHeightPt + capGapPt : 0);
+
+    // Reuse the grid's disk-cached thumbnail pipeline (thumbnails.js) rather
+    // than decoding every full-resolution original, but at a resolution
+    // sized for this sheet's actual print size instead of the grid's fixed
+    // 440px tile cap — that cap was tuned for on-screen browsing, and now
+    // that export doesn't need to stay fast at all costs there's no reason
+    // to print, say, a 2in cell from a 440px source. Target 300ppi at the
+    // cell's longer edge (whichever the image ends up bound by after
+    // fit-to-box), capped at 2400px so a huge custom page size can't demand
+    // an unreasonable decode. Below the grid's own cap this just reuses the
+    // existing 440px cache entry — no extra work for small/dense grids.
+    // Falls back to the original path if a thumbnail can't be generated
     // (getThumbnailPath resolves null rather than rejecting) so a file that
     // can't be thumbnailed still shows up instead of silently vanishing.
+    const exportMaxDimension = Math.min(2400, Math.max(
+      thumbnails.THUMB_MAX_DIMENSION,
+      Math.round((Math.max(cellWPt, thumbHPt) / 72) * 300),
+    ));
+    const exportQuality = exportMaxDimension > thumbnails.THUMB_MAX_DIMENSION ? 'best' : 'normal';
     const uniquePaths = [...new Set(pages.flat().map((it) => it.path))];
     const thumbByPath = new Map();
     let resolved = 0;
     sendProgress({ stage: 'images', loaded: 0, total: uniquePaths.length });
     await Promise.all(uniquePaths.map(async (p) => {
-      const thumb = await thumbnails.getThumbnailPath(p);
+      const thumb = await thumbnails.getThumbnailPath(p, { maxDimension: exportMaxDimension, quality: exportQuality });
       thumbByPath.set(p, thumb || p);
       resolved += 1;
       sendProgress({ stage: 'images', loaded: resolved, total: uniquePaths.length });
@@ -416,11 +433,6 @@ app.whenReady().then(() => {
 
     try {
       sendProgress({ stage: 'rendering' });
-      const capGapPt = 2;
-      const capLineHeightPt = caption.on ? caption.size * 1.2 : 0;
-      const cellWPt = (pageWidthPt - 2 * marginPt - (cols - 1) * gapPt) / cols;
-      const cellHPt = (pageHeightPt - 2 * marginPt - (rows - 1) * gapPt) / rows;
-      const thumbHPt = cellHPt - (caption.on ? capLineHeightPt + capGapPt : 0);
 
       // pdfkit has no built-in text-overflow ellipsis (the CSS version this
       // replaces relied on `text-overflow: ellipsis`) — binary-search the
