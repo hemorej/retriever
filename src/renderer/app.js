@@ -471,9 +471,10 @@
       return {
         cols: [
           { label: 'Navigate', rows: [
-            ['↑ ↓ ← →', 'move selection'], ['↵', 'open fit-width'], ['esc', 'back to grid'],
+            ['↑ ↓ ← →', 'move selection'], ['↵ / space', 'open fit-width'], ['esc', 'back to grid'],
             ['⌘T', 'new tab'], ['⌘1–9', 'go to tab'], ['⌘⌥←', 'parent folder'],
             ['⌘F', 'search filenames'], ['⌘L', 'filter panel'], ['P', 'compare selected images (2–6)'], ['⌘⇧C', 'contact sheet / browse'],
+            ['O', 'open in editor'],
           ]},
           { label: 'Select & group', rows: [
             ['⌘A', 'select all'], ['⇧click', 'extend'], ['⌘click', 'add / remove'],
@@ -1680,8 +1681,9 @@
           else if (state.selection.length) state.selection = [];
           return;
         }
-        if (e.key === 'Enter' && activePath.value && state.viewMode === 'grid') { openViewer(activePath.value); return; }
+        if ((e.key === 'Enter' || e.key === ' ') && activePath.value && state.viewMode === 'grid') { e.preventDefault(); openViewer(activePath.value); return; }
         if (!e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); openCompareView(); return; }
+        if (!e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'o' && activePath.value) { e.preventDefault(); openInExternalEditor(activePath.value); return; }
 
         const order = navOrder.value;
         if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
