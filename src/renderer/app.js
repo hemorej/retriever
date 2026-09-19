@@ -1001,6 +1001,23 @@
           state.undoStack.push({ type: 'tags', path: p, prevTags });
         }
       }
+      // Keyboard toggle: if every selected file already has the tag, remove it
+      // from all of them; otherwise add it to the ones missing it.
+      async function toggleTagOnSelection(name) {
+        const files = state.selection.map((p) => [p, state.files.get(p)]).filter(([, f]) => f);
+        if (!files.length) return;
+        const removing = files.every(([, f]) => f.tags.includes(name));
+        for (const [p, f] of files) {
+          if (!removing && f.tags.includes(name)) continue;
+          const prevTags = [...f.tags];
+          const res = removing
+            ? await window.retriever.untagFile(p, name)
+            : await window.retriever.tagFile(p, name);
+          f.tags = res.tags;
+          if (res.tags.length) persistedTags[p] = [...res.tags]; else delete persistedTags[p];
+          state.undoStack.push({ type: 'tags', path: p, prevTags });
+        }
+      }
       async function clearTagsForSelection() {
         for (const p of state.selection) {
           const f = state.files.get(p);
@@ -1735,7 +1752,7 @@
           if (state.tabs[idx]) selectTab(state.tabs[idx].id);
           return;
         }
-        if (!e.metaKey && ['1', '2', '3', '4'].includes(e.key)) { applyTagToSelection(TAG_BY_KEY[e.key]); return; }
+        if (!e.metaKey && ['1', '2', '3', '4'].includes(e.key)) { toggleTagOnSelection(TAG_BY_KEY[e.key]); return; }
         if (!e.metaKey && e.key === '0') { clearTagsForSelection(); return; }
         if (e.key === '[') { rotateSelection(-90); return; }
         if (e.key === ']') { rotateSelection(90); return; }

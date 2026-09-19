@@ -101,6 +101,12 @@ function addTag(db, fileId, tagName) {
   ).run(fileId, tag.id);
 }
 
+function removeTag(db, fileId, tagName) {
+  db.prepare(
+    'DELETE FROM file_tags WHERE file_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)'
+  ).run(fileId, tagName);
+}
+
 function clearTags(db, fileId) {
   db.prepare('DELETE FROM file_tags WHERE file_id = ?').run(fileId);
 }
@@ -144,6 +150,7 @@ module.exports = {
   reattachPath,
   deleteFile,
   addTag,
+  removeTag,
   clearTags,
   getTagsForFile,
   getAllFileTags,

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('retriever', {
   getAllTags: () => ipcRenderer.invoke('get-all-tags'),
   getLostFiles: () => ipcRenderer.invoke('get-lost-files'),
   getFileInfo: (filePath) => ipcRenderer.invoke('get-file-info', filePath),
+  untagFile: (filePath, tagName) => ipcRenderer.invoke('untag-file', { filePath, tagName }),
   clearTags: (filePath) => ipcRenderer.invoke('clear-tags', filePath),
   revealInFinder: (filePath) => ipcRenderer.invoke('reveal-in-finder', filePath),
   openPrivacySettings: () => ipcRenderer.invoke('open-privacy-settings'),

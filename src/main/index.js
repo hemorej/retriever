@@ -162,6 +162,13 @@ app.whenReady().then(() => {
     return { fileId: row.id, hash: row.hash, tags: db.getTagsForFile(database, row.id) };
   });
 
+  ipcMain.handle('untag-file', (_event, { filePath, tagName }) => {
+    const row = db.getByPath(database, filePath);
+    if (!row) return { tags: [] };
+    db.removeTag(database, row.id, tagName);
+    return { tags: db.getTagsForFile(database, row.id) };
+  });
+
   ipcMain.handle('get-tags', (_event, filePath) => {
     const row = db.getByPath(database, filePath);
     if (!row) return [];
