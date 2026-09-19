@@ -963,8 +963,11 @@
       });
 
       // ---------- selection ----------
-      function selectSingle(p) { state.selection = [p]; }
+      // Fixed end of a shift+arrow range; the moving end is the last selection entry.
+      let selectionAnchor = null;
+      function selectSingle(p) { state.selection = [p]; selectionAnchor = p; }
       function selectToggle(p) {
+        selectionAnchor = p;
         const i = state.selection.indexOf(p);
         if (i === -1) state.selection.push(p); else state.selection.splice(i, 1);
       }
@@ -1716,7 +1719,16 @@
           const cur = order.indexOf(activePath.value);
           const delta = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' ? -GRID_COLS : GRID_COLS;
           const next = order[Math.min(Math.max(cur + delta, 0), order.length - 1)] || order[0];
-          if (next) {
+          if (next && e.shiftKey && !e.metaKey && !e.altKey && activePath.value) {
+            if (!state.selection.includes(selectionAnchor)) selectionAnchor = activePath.value;
+            const a = order.indexOf(selectionAnchor);
+            const b = order.indexOf(next);
+            const step = b >= a ? 1 : -1;
+            const range = [];
+            for (let k = a; k !== b + step; k += step) range.push(order[k]);
+            state.selection = range; // cursor (next) stays last so activePath follows it
+            if (state.viewMode === 'grid') ensureRowVisible(next);
+          } else if (next) {
             selectSingle(next);
             if (state.viewMode === 'grid') ensureRowVisible(next);
           }
