@@ -786,14 +786,22 @@
 
       const allFiles = computed(() => Array.from(state.files.values()));
 
+      // Files in the folder currently being browsed (respecting the
+      // include-subfolders toggle) — tag/type counts reflect this, not the whole root.
+      const folderFiles = computed(() => {
+        if (!state.folderFilter) return allFiles.value;
+        return allFiles.value.filter((f) => f.dir === state.folderFilter ||
+          (state.filters.includeSubfolders && f.dir.startsWith(state.folderFilter + '/')));
+      });
+
       const tagCounts = computed(() => {
         const c = { select: 0, reject: 0, maybe: 0, published: 0 };
-        for (const f of allFiles.value) for (const t of f.tags) if (c[t] !== undefined) c[t] += 1;
+        for (const f of folderFiles.value) for (const t of f.tags) if (c[t] !== undefined) c[t] += 1;
         return c;
       });
       const typeCounts = computed(() => {
         const c = {};
-        for (const f of allFiles.value) { const e = extname(f.path); if (e) c[e] = (c[e] || 0) + 1; }
+        for (const f of folderFiles.value) { const e = extname(f.path); if (e) c[e] = (c[e] || 0) + 1; }
         return c;
       });
 
