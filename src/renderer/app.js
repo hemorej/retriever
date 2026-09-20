@@ -2105,12 +2105,14 @@
                     </div>
                   </div>
 
-                  <div v-else class="tile" :style="tileGridPosition(i)" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
+                  <div v-else class="tile" :style="tileGridPosition(i)" :class="{ selected: state.selection.includes(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
                     <div class="tile-stack">
-                      <div class="layer layer1"></div>
-                      <div class="layer layer2"></div>
-                      <div class="front"><img v-if="entry.cover" :src="gridThumbSrc(entry.cover.path)" /></div>
-                      <div class="stack-pill" @click.stop="toggleExpand(entry.group.id)">▸ {{ entry.group.memberPaths.length }}</div>
+                      <div class="stack-card">
+                        <div class="layer layer1"></div>
+                        <div class="layer layer2"></div>
+                        <img v-if="entry.cover" class="front" :src="gridThumbSrc(entry.cover.path)" />
+                        <div class="stack-pill" @click.stop="toggleExpand(entry.group.id)">▸ {{ entry.group.memberPaths.length }}</div>
+                      </div>
                     </div>
                     <div class="tile-group-name">{{ entry.group.name }} ⌗</div>
                   </div>
