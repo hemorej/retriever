@@ -180,6 +180,22 @@ app.whenReady().then(() => {
   // Bulk tag lookup for renderer startup hydration — { path: [tagNames] }.
   ipcMain.handle('get-all-tags', () => db.getAllFileTags(database));
 
+  ipcMain.handle('create-group', async (_event, { name, filePaths }) => {
+    const ids = [];
+    for (const p of filePaths) ids.push((await ensureTracked(database, p)).id);
+    return db.createGroup(database, name, ids);
+  });
+
+  ipcMain.handle('delete-group', (_event, groupId) => db.deleteGroup(database, groupId));
+
+  ipcMain.handle('add-to-group', async (_event, { groupId, filePaths }) => {
+    const ids = [];
+    for (const p of filePaths) ids.push((await ensureTracked(database, p)).id);
+    db.addGroupMembers(database, groupId, ids);
+  });
+
+  ipcMain.handle('get-all-groups', () => db.getAllGroups(database));
+
   // Preload runs sandboxed and can't require('os')/require('path') itself,
   // so the renderer asks main for these instead of reading them locally.
   ipcMain.handle('get-home-dir', () => os.homedir());

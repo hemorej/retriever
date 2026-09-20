@@ -673,6 +673,14 @@
         applyPersistedTags();
       }
 
+      async function hydrateGroups() {
+        try {
+          state.groups = (await window.retriever.getAllGroups()) || [];
+        } catch {
+          state.groups = [];
+        }
+      }
+
       function applyFsEvent(evt, counts) {
         if (evt.type === 'added') {
           if (!isImagePath(evt.filePath)) return;
@@ -764,6 +772,7 @@
         tab.sheet = defaultSheet();
         selectFolder(rootDir);
         hydrateTags();
+        hydrateGroups();
       }
 
       async function chooseFolder() {
@@ -1047,15 +1056,20 @@
       }
 
       // ---------- grouping ----------
-      function groupSelection() {
+      async function groupSelection() {
         if (state.selection.length < 2) { toast('Select two or more files to group them.'); return; }
-        const key = state.selection[0];
+        const members = [...state.selection];
+        const key = members[0];
         const name = stripExt(key) + '_seq';
-        state.groups.push({ id: uid('grp'), name, memberPaths: [...state.selection], keyPath: key });
+        try {
+          const id = await window.retriever.createGroup(name, members);
+          state.groups.push({ id, name, memberPaths: members, keyPath: key });
+        } catch (e) { toast(e.message); }
       }
       function ungroup(gid) {
         const i = state.groups.findIndex((g) => g.id === gid);
         if (i !== -1) { state.expandedGroups.delete(gid); state.groups.splice(i, 1); }
+        window.retriever.deleteGroup(gid).catch((e) => toast(e.message));
       }
       function toggleExpand(gid) {
         state.expandedGroups.has(gid) ? state.expandedGroups.delete(gid) : state.expandedGroups.add(gid);
@@ -1063,7 +1077,10 @@
       function addSelectionToGroup(gid) {
         const g = groupById.value.get(gid);
         if (!g) return;
-        for (const p of state.selection) if (!g.memberPaths.includes(p)) g.memberPaths.push(p);
+        const added = state.selection.filter((p) => !g.memberPaths.includes(p));
+        if (!added.length) return;
+        g.memberPaths.push(...added);
+        window.retriever.addToGroup(gid, added).catch((e) => toast(e.message));
       }
 
       // ---------- file ops ----------
@@ -1444,6 +1461,7 @@
         await window.retriever.watchFolder(tab.rootDir);
         selectFolder(tab.folderFilter || tab.rootDir);
         hydrateTags();
+        hydrateGroups();
       }
       async function selectTab(id) {
         if (id === state.activeTabId) return;

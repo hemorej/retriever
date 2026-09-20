@@ -140,7 +140,53 @@ function getAllFileTags(db) {
   return map;
 }
 
+function createGroup(db, name, fileIds) {
+  const tx = db.transaction(() => {
+    const id = db.prepare('INSERT INTO groups (name) VALUES (?)').run(name).lastInsertRowid;
+    const ins = db.prepare('INSERT OR IGNORE INTO group_members (group_id, file_id, position) VALUES (?, ?, ?)');
+    fileIds.forEach((fid, i) => ins.run(id, fid, i));
+    return Number(id);
+  });
+  return tx();
+}
+
+function deleteGroup(db, groupId) {
+  db.prepare('DELETE FROM groups WHERE id = ?').run(groupId);
+}
+
+function addGroupMembers(db, groupId, fileIds) {
+  let pos = db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS n FROM group_members WHERE group_id = ?').get(groupId).n;
+  const ins = db.prepare('INSERT OR IGNORE INTO group_members (group_id, file_id, position) VALUES (?, ?, ?)');
+  for (const fid of fileIds) pos += ins.run(groupId, fid, pos).changes;
+}
+
+// Every group with its currently-present members, as
+// [{ id, name, memberPaths, keyPath }]. Lost members (path NULL) are kept in
+// the table but omitted here; the first present member is the cover.
+function getAllGroups(db) {
+  const rows = db
+    .prepare(
+      `SELECT groups.id AS id, groups.name AS name, files.path AS path
+       FROM groups
+       JOIN group_members ON group_members.group_id = groups.id
+       JOIN files ON files.id = group_members.file_id
+       WHERE files.path IS NOT NULL
+       ORDER BY groups.id, group_members.position`
+    )
+    .all();
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.id)) map.set(r.id, { id: r.id, name: r.name, memberPaths: [], keyPath: r.path });
+    map.get(r.id).memberPaths.push(r.path);
+  }
+  return [...map.values()];
+}
+
 module.exports = {
+  createGroup,
+  deleteGroup,
+  addGroupMembers,
+  getAllGroups,
   openDb,
   getByPath,
   getByHash,
