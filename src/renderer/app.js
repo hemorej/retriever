@@ -1812,6 +1812,20 @@
           if (el) { gridScrollTop.value = el.scrollTop; gridViewportHeight.value = el.clientHeight; gridResizeObserver.observe(el); }
         }, { immediate: true });
         watch(() => [state.thumbSize, renderedEntries.value.length], () => nextTick(measureTileRowExtra), { immediate: true });
+        // Keep the viewer's filmstrip centred on the active picture. Also
+        // re-runs when the strip's windowed contents shift or the viewer
+        // (re)mounts, since a fresh strip starts at scrollLeft 0.
+        watch(() => [activePath.value, state.viewMode, compareMode.value, filmstripOrder.value[0]], () => {
+          if (state.viewMode !== 'viewer') return;
+          const cell = document.querySelector('.filmstrip-cell.current');
+          const strip = cell && cell.parentElement;
+          if (!strip) return;
+          // .filmstrip isn't positioned, so offsetLeft would be relative to
+          // an ancestor — measure against the strip's own rect instead.
+          const c = cell.getBoundingClientRect();
+          const s = strip.getBoundingClientRect();
+          strip.scrollLeft += (c.left + c.width / 2) - (s.left + s.width / 2);
+        }, { flush: 'post', immediate: true });
         watch(() => activeTab.value && (activeTab.value.folderFilter || activeTab.value.rootDir), (dir) => {
           document.title = dir ? basename(dir) : 'Retriever';
         }, { immediate: true });
