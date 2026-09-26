@@ -551,6 +551,7 @@
         contextMenu: reactive({ open: false, x: 0, y: 0, targetPath: null, isGroup: false, groupId: null }),
         folderContextMenu: reactive({ open: false, x: 0, y: 0, targetPath: null }),
         folderRenameDialog: reactive({ open: false, path: null }),
+        fileRenameDialog: reactive({ open: false, path: null }),
         folderDeleteDialog: reactive({ open: false, path: null }),
         fileDeleteDialog: reactive({ open: false, paths: [] }),
         tagMenu: reactive({ open: false, x: 0, y: 0 }),
@@ -1119,6 +1120,8 @@
         } catch (e) { toast(e.message); }
       }
       function startInlineRename(p) {
+        // The viewer has no tile to edit in place, so use a dialog there.
+        if (state.viewMode === 'viewer') { state.fileRenameDialog.path = p; state.fileRenameDialog.open = true; return; }
         state.inlineRenamePath = p;
         state.inlineRenameValue = stripExt(p);
       }
@@ -1137,6 +1140,15 @@
         }
       }
       function cancelInlineRename() { state.inlineRenamePath = null; }
+      async function commitFileRename(newBase) {
+        const p = state.fileRenameDialog.path;
+        state.fileRenameDialog.open = false;
+        const f = state.files.get(p);
+        const ext = extname(p) ? '.' + extname(p) : '';
+        const newName = newBase.trim() + ext;
+        if (!f || !newBase.trim() || newName === f.name) return;
+        try { await window.retriever.renameFile(p, newName); } catch (e) { toast(e.message); }
+      }
 
       // Defined as a real function rather than inline in the template: an
       // expression embedded directly in a `@rename="..."` attribute is
@@ -1715,6 +1727,7 @@
           else if (state.contextMenu.open) state.contextMenu.open = false;
           else if (state.folderContextMenu.open) state.folderContextMenu.open = false;
           else if (state.folderRenameDialog.open) state.folderRenameDialog.open = false;
+          else if (state.fileRenameDialog.open) state.fileRenameDialog.open = false;
           else if (state.folderDeleteDialog.open) state.folderDeleteDialog.open = false;
           else if (state.fileDeleteDialog.open) state.fileDeleteDialog.open = false;
           else if (state.tagMenu.open) state.tagMenu.open = false;
@@ -1901,7 +1914,7 @@
         openPrivacySettings, openContainingFolder,
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
         openFileContextMenu, handleContextAction, confirmFileDelete, commitFileDelete,
-        openFolderContextMenu, handleFolderContextAction, commitFolderRename, commitFolderDelete,
+        openFolderContextMenu, handleFolderContextAction, commitFolderRename, commitFileRename, commitFolderDelete,
         openViewer, backToGrid, stepViewer, ensureFileInfo,
         selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders, otherFilesNote, previewSrc, gridThumbSrc,
         undo, onSliderPointerDown, onSheetSliderPointerDown, toast, onImageLoad,
@@ -2281,7 +2294,7 @@
           <template v-else-if="activeFile">
             <div class="viewer-body">
               <div class="viewer-stage">
-                <img :src="previewSrc(activeFile.path)" :style="{ transform: 'rotate(' + (state.rotations[activeFile.path] || 0) + 'deg)' }" @load="onImageLoad(activeFile, $event)" />
+                <img :src="previewSrc(activeFile.path)" :style="{ transform: 'rotate(' + (state.rotations[activeFile.path] || 0) + 'deg)' }" @load="onImageLoad(activeFile, $event)" @contextmenu="openFileContextMenu($event, activeFile.path)" />
               </div>
               <div class="filmstrip">
                 <div class="filmstrip-cell" v-for="p in filmstripOrder" :key="p" :class="{ current: p === activePath }" @click="selectSingle(p)">
@@ -2291,6 +2304,8 @@
             </div>
           </template>
 
+          <context-menu v-if="state.contextMenu.open" :x="state.contextMenu.x" :y="state.contextMenu.y"
+                         :can-group="state.selection.length >= 2" @action="handleContextAction"></context-menu>
           <tag-menu v-if="state.tagMenu.open" :x="state.tagMenu.x" :y="state.tagMenu.y" @pick="pickFromTagMenu" @click.stop></tag-menu>
         </div>
 
@@ -2489,6 +2504,9 @@
 
       <rename-dialog v-if="state.folderRenameDialog.open" title="Rename folder" :value="basename(state.folderRenameDialog.path)"
                      @close="state.folderRenameDialog.open = false" @rename="commitFolderRename"></rename-dialog>
+
+      <rename-dialog v-if="state.fileRenameDialog.open" title="Rename file" :value="stripExt(state.fileRenameDialog.path)"
+                     @close="state.fileRenameDialog.open = false" @rename="commitFileRename"></rename-dialog>
 
       <confirm-dialog v-if="state.fileDeleteDialog.open" title="Delete file"
                       :message="state.fileDeleteDialog.paths.length === 1 ? 'Move “' + basename(state.fileDeleteDialog.paths[0]) + '” to the Trash?' : 'Move ' + state.fileDeleteDialog.paths.length + ' files to the Trash?'"
