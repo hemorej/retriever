@@ -597,6 +597,7 @@
       // tick instead of one Vue update per file.
       let eventQueue = [];
       let flushScheduled = false;
+      const pendingRenames = new Map(); // old path -> new path, for renames we initiated
       function queueFsEvent(evt) {
         eventQueue.push(evt);
         if (!flushScheduled) {
@@ -705,6 +706,12 @@
           counts.added += 1;
         } else if (evt.type === 'removed') {
           state.files.delete(evt.filePath);
+          const renamedTo = pendingRenames.get(evt.filePath);
+          if (renamedTo) {
+            pendingRenames.delete(evt.filePath);
+            const i = state.selection.indexOf(evt.filePath);
+            if (i !== -1) state.selection[i] = renamedTo;
+          }
           counts.removed += 1;
         } else if (evt.type === 'lost') {
           const f = state.files.get(evt.filePath);
@@ -1119,6 +1126,20 @@
           toast(`${mode === 'move' ? 'Moved' : 'Copied'} ${result.length} file${result.length === 1 ? '' : 's'} to ${destDir}`);
         } catch (e) { toast(e.message); }
       }
+      // An untagged file's rename reaches us as removed+added (no `moved`),
+      // which would strand the selection on the dead old path and leave the
+      // active view (viewer, info strip) with no file to show. Remember the
+      // expected new path so the `removed` handler can carry the selection over.
+      async function renameTracked(p, newName) {
+        const newPath = dirname(p) + '/' + newName;
+        pendingRenames.set(p, newPath);
+        try {
+          return await window.retriever.renameFile(p, newName);
+        } catch (e) {
+          pendingRenames.delete(p);
+          throw e;
+        }
+      }
       function startInlineRename(p) {
         // The viewer has no tile to edit in place, so use a dialog there.
         if (state.viewMode === 'viewer') { state.fileRenameDialog.path = p; state.fileRenameDialog.open = true; return; }
@@ -1134,7 +1155,7 @@
         state.inlineRenamePath = null;
         if (!f || !newName || newName === f.name) return;
         try {
-          await window.retriever.renameFile(p, newName);
+          await renameTracked(p, newName);
         } catch (e) {
           toast(e.message);
         }
@@ -1147,7 +1168,7 @@
         const ext = extname(p) ? '.' + extname(p) : '';
         const newName = newBase.trim() + ext;
         if (!f || !newBase.trim() || newName === f.name) return;
-        try { await window.retriever.renameFile(p, newName); } catch (e) { toast(e.message); }
+        try { await renameTracked(p, newName); } catch (e) { toast(e.message); }
       }
 
       // Defined as a real function rather than inline in the template: an
@@ -1158,7 +1179,7 @@
       // there, breaking `window.retriever.*`.
       async function commitMassRename(previews) {
         for (const p of previews) {
-          try { await window.retriever.renameFile(p.file.path, p.next); } catch (e) { toast(e.message); }
+          try { await renameTracked(p.file.path, p.next); } catch (e) { toast(e.message); }
         }
         state.renameDialogOpen = false;
       }
