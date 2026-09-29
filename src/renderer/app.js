@@ -859,10 +859,14 @@
         for (const f of sortedFiles.value) {
           const gid = groupMembership.value.get(f.path);
           if (gid) {
-            if (state.expandedGroups.has(gid) || seen.has(gid)) continue;
+            if (seen.has(gid)) continue;
             seen.add(gid);
             const g = groupById.value.get(gid);
-            entries.push({ type: 'group', group: g, cover: state.files.get(g.keyPath) || f });
+            // An expanded group stays at the slot of its first member and
+            // renders as a gold box spanning as many columns as it has members.
+            const expanded = state.expandedGroups.has(gid);
+            const members = expanded ? g.memberPaths.filter((p) => state.files.get(p)) : null;
+            entries.push({ type: 'group', group: g, cover: state.files.get(g.keyPath) || f, expanded, members });
           } else {
             entries.push({ type: 'file', file: f });
           }
@@ -894,30 +898,66 @@
         });
       }
       function measureTileRowExtra() {
-        const tile = document.querySelector('.tile-grid .tile');
-        if (!tile) return;
-        const extra = tile.offsetHeight - state.thumbSize;
+        const tile = document.querySelector('.tile-grid > .tile');
+        if (!tile || !tile.lastElementChild) return;
+        // Content height, not offsetHeight: the tile is stretched to the row,
+        // which would feed the group-box bonus back into the measurement.
+        const last = tile.lastElementChild;
+        const extra = Math.ceil(last.getBoundingClientRect().bottom - tile.firstElementChild.getBoundingClientRect().top) - state.thumbSize;
         if (extra > 0 && Math.abs(extra - tileRowExtra.value) > 1) tileRowExtra.value = extra;
       }
-      const gridRowHeight = computed(() => state.thumbSize + tileRowExtra.value);
+      // An expanded group box hangs its action row and top padding above the
+      // thumbnails; plain tiles get matching top padding (.has-group-box) so
+      // all thumbnail top edges line up, and every row grows by GROUP_BOX_EXTRA.
+      const GROUP_BOX_EXTRA = 48;
+      const hasExpandedEntry = computed(() => gridEntries.value.some((e) => e.expanded));
+      const gridRowHeight = computed(() => state.thumbSize + tileRowExtra.value + (hasExpandedEntry.value ? GROUP_BOX_EXTRA : 0));
       const gridRowStride = computed(() => gridRowHeight.value + 16); // 16 = .tile-grid row gap
-      const gridTotalRows = computed(() => Math.ceil(gridEntries.value.length / GRID_COLS));
+      // Places every entry on the grid: plain tiles take one cell, an expanded
+      // group takes min(members, GRID_COLS) columns and enough rows to wrap.
+      const gridLayout = computed(() => {
+        const list = gridEntries.value;
+        const rows = new Array(list.length), cols = new Array(list.length), cs = new Array(list.length), rs = new Array(list.length);
+        let row = 0, col = 0;
+        for (let i = 0; i < list.length; i++) {
+          const e = list[i];
+          let c = 1, r = 1;
+          if (e.expanded) { c = Math.max(1, Math.min(e.members.length, GRID_COLS)); r = Math.max(1, Math.ceil(e.members.length / GRID_COLS)); }
+          if (col + c > GRID_COLS) { row++; col = 0; }
+          rows[i] = row; cols[i] = col; cs[i] = c; rs[i] = r;
+          if (r > 1) { row += r; col = 0; } else { col += c; if (col >= GRID_COLS) { row++; col = 0; } }
+        }
+        return { rows, cols, cs, rs, total: col > 0 ? row + 1 : row };
+      });
+      const gridTotalRows = computed(() => gridLayout.value.total);
       const gridStartRow = computed(() => Math.max(0, Math.floor(gridScrollTop.value / gridRowStride.value) - GRID_OVERSCAN_ROWS));
       const gridEndRow = computed(() => Math.min(
         gridTotalRows.value,
         Math.ceil((gridScrollTop.value + gridViewportHeight.value) / gridRowStride.value) + GRID_OVERSCAN_ROWS,
       ));
-      const gridStartIndex = computed(() => gridStartRow.value * GRID_COLS);
-      const renderedEntries = computed(() => gridEntries.value.slice(gridStartIndex.value, gridEndRow.value * GRID_COLS));
+      const gridStartIndex = computed(() => {
+        const { rows, rs } = gridLayout.value;
+        let lo = 0, hi = rows.length;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (rows[mid] + rs[mid] > gridStartRow.value) hi = mid; else lo = mid + 1; }
+        return lo;
+      });
+      const renderedEntries = computed(() => {
+        const { rows } = gridLayout.value;
+        let end = gridStartIndex.value;
+        while (end < rows.length && rows[end] < gridEndRow.value) end++;
+        return gridEntries.value.slice(gridStartIndex.value, end);
+      });
       function tileGridPosition(offset) {
         const idx = gridStartIndex.value + offset;
-        return { gridColumn: (idx % GRID_COLS) + 1, gridRow: Math.floor(idx / GRID_COLS) + 1 };
+        const { rows, cols, cs, rs } = gridLayout.value;
+        return { gridColumn: `${cols[idx] + 1} / span ${cs[idx]}`, gridRow: `${rows[idx] + 1} / span ${rs[idx]}` };
       }
 
       function ensureRowVisible(path) {
-        const idx = gridEntries.value.findIndex((e) => (e.type === 'file' ? e.file.path : e.group.keyPath) === path);
+        let idx = gridEntries.value.findIndex((e) => (e.type === 'file' ? e.file.path : e.group.keyPath) === path);
+        if (idx === -1) idx = gridEntries.value.findIndex((e) => e.expanded && e.members.includes(path));
         if (idx === -1 || !gridAreaEl.value) return;
-        const row = Math.floor(idx / GRID_COLS);
+        const row = gridLayout.value.rows[idx];
         const top = row * gridRowStride.value;
         const bottom = top + gridRowHeight.value;
         const el = gridAreaEl.value;
@@ -929,8 +969,10 @@
 
       const navOrder = computed(() => {
         const order = [];
-        for (const e of gridEntries.value) order.push(e.type === 'group' ? e.group.keyPath : e.file.path);
-        for (const g of expandedGroupList.value) for (const p of g.memberPaths) order.push(p);
+        for (const e of gridEntries.value) {
+          if (e.expanded) for (const p of e.members) order.push(p);
+          else order.push(e.type === 'group' ? e.group.keyPath : e.file.path);
+        }
         return order;
       });
 
@@ -1927,7 +1969,7 @@
         sheetSourceFiles, sheetGrid, sheetDims, sheetPerPage, sheetPages, sheetFilenameStem, sheetCurrentPageFiles,
         switchToSheet, switchToBrowse, toggleSheetView, toggleSheetSelect, selectAllSheetSource,
         clearSheetSelection, resetSheetLayout, sheetStepPage, exportContactSheet, sheetExportLabel, sheetExportPct,
-        gridAreaEl, onGridScroll, tileGridPosition, gridRowHeight, gridTotalRows,
+        gridAreaEl, onGridScroll, tileGridPosition, gridRowHeight, hasExpandedEntry, gridTotalRows,
         onTileClick, onGridAreaClick, selectSingle, selectAll, treeAutoExpandDepth, saveSession,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
         rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup,
@@ -2134,7 +2176,7 @@
                 </div>
               </div>
 
-              <div class="tile-grid" :style="{ '--row-h': gridRowHeight + 'px' }">
+              <div class="tile-grid" :class="{ 'has-group-box': hasExpandedEntry }" :style="{ '--row-h': gridRowHeight + 'px' }">
                 <template v-for="(entry, i) in renderedEntries" :key="entry.type === 'group' ? entry.group.id : entry.file.path">
 
                   <div v-if="entry.type === 'file'" class="tile" :style="tileGridPosition(i)" :class="{ selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
@@ -2151,6 +2193,23 @@
                       <span v-else-if="entry.file.tags[0]" class="swatch" :style="{ background: tagMeta(entry.file.tags[0]).var }"></span>
                       <span class="fname">{{ entry.file.name }}</span>
                     </div>
+                  </div>
+
+                  <div v-else-if="entry.expanded" class="group-wrap" :style="tileGridPosition(i)">
+                   <div class="group-actions">
+                     <span @click="toggleExpand(entry.group.id)">collapse</span>
+                     <span @click="addSelectionToGroup(entry.group.id)">add selection</span>
+                     <span @click="ungroup(entry.group.id)">ungroup</span>
+                   </div>
+                   <div class="group-band">
+                    <div class="tile-grid" :style="{ '--row-h': 'auto', '--cols': Math.min(entry.members.length, 6) }">
+                      <div v-for="p in entry.members" :key="p" class="tile"
+                           :class="{ selected: state.selection.includes(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
+                        <div class="tile-thumb"><img :src="gridThumbSrc(p)" /></div>
+                        <div class="tile-name"><span class="fname">{{ state.files.get(p).name }}</span></div>
+                      </div>
+                    </div>
+                  </div>
                   </div>
 
                   <div v-else class="tile" :style="tileGridPosition(i)" :class="{ selected: state.selection.includes(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
@@ -2171,27 +2230,7 @@
                      tiles: without a fixed grid-row, CSS grid would drop these
                      into whatever earlier row is currently unoccupied (i.e. any
                      scrolled-past virtualized row), not visually below the grid. -->
-                <div class="group-band" v-for="(g, gi) in expandedGroupList" :key="g.id" :style="{ gridRow: gridTotalRows + 1 + gi, gridColumn: '1 / -1' }">
-                  <div class="group-band-head">
-                    <span>▾ group "{{ g.name }}" · {{ g.memberPaths.length }} items</span>
-                    <span class="actions">
-                      <span @click="toggleExpand(g.id)">collapse</span>
-                      <span @click="addSelectionToGroup(g.id)">add selection</span>
-                      <span @click="ungroup(g.id)">ungroup</span>
-                    </span>
-                  </div>
-                  <div class="tile-grid" style="--thumb-h:104px; --row-h:auto">
-                    <template v-for="p in g.memberPaths" :key="p">
-                      <div v-if="state.files.get(p)" class="tile"
-                           :class="{ selected: state.selection.includes(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
-                        <div class="tile-thumb"><img :src="gridThumbSrc(p)" /></div>
-                        <div class="tile-name"><span class="fname">{{ state.files.get(p).name }}</span></div>
-                      </div>
-                    </template>
-                  </div>
-                </div>
-
-                <div class="grid-sizer" :style="{ gridColumn: 1, gridRow: gridTotalRows + 1 + expandedGroupList.length }"></div>
+                <div class="grid-sizer" :style="{ gridColumn: 1, gridRow: gridTotalRows + 1 }"></div>
               </div>
             </template>
 
