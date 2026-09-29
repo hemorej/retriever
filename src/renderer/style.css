@@ -494,4 +494,4 @@ body {
 .group-actions { height: 26px; flex: none; display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; font-size: 11px; font-family: var(--font-mono); color: var(--text-muted-2); white-space: nowrap; }
 .group-actions span { cursor: pointer; }
 .group-actions span:hover { color: var(--text-primary); }
-.tile-grid.has-group-box > .tile { padding-top: 40px; box-sizing: border-box; }
+.tile-grid > .tile.box-pad { padding-top: 40px; box-sizing: border-box; }

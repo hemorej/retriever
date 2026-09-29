@@ -194,6 +194,11 @@ app.whenReady().then(() => {
     db.addGroupMembers(database, groupId, ids);
   });
 
+  ipcMain.handle('remove-from-group', (_event, { groupId, filePaths }) => {
+    const ids = filePaths.map((p) => db.getByPath(database, p)).filter(Boolean).map((r) => r.id);
+    db.removeGroupMembers(database, groupId, ids);
+  });
+
   ipcMain.handle('get-all-groups', () => db.getAllGroups(database));
 
   // Preload runs sandboxed and can't require('os')/require('path') itself,

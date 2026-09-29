@@ -908,10 +908,10 @@
       }
       // An expanded group box hangs its action row and top padding above the
       // thumbnails; plain tiles get matching top padding (.has-group-box) so
-      // all thumbnail top edges line up, and every row grows by GROUP_BOX_EXTRA.
+      // all thumbnail top edges line up, and only the row the group starts on
+      // grows by GROUP_BOX_EXTRA; other rows keep the base height.
       const GROUP_BOX_EXTRA = 48;
-      const hasExpandedEntry = computed(() => gridEntries.value.some((e) => e.expanded));
-      const gridRowHeight = computed(() => state.thumbSize + tileRowExtra.value + (hasExpandedEntry.value ? GROUP_BOX_EXTRA : 0));
+      const gridRowHeight = computed(() => state.thumbSize + tileRowExtra.value);
       const gridRowStride = computed(() => gridRowHeight.value + 16); // 16 = .tile-grid row gap
       // Places every entry on the grid: plain tiles take one cell, an expanded
       // group takes min(members, GRID_COLS) columns and enough rows to wrap.
@@ -930,7 +930,33 @@
         return { rows, cols, cs, rs, total: col > 0 ? row + 1 : row };
       });
       const gridTotalRows = computed(() => gridLayout.value.total);
-      const gridStartRow = computed(() => Math.max(0, Math.floor(gridScrollTop.value / gridRowStride.value) - GRID_OVERSCAN_ROWS));
+      // Sorted rows that carry the group-box bonus (the row each expanded group starts on).
+      const boxRows = computed(() => {
+        const { rows } = gridLayout.value;
+        const out = [];
+        gridEntries.value.forEach((e, i) => { if (e.expanded) out.push(rows[i]); });
+        return out;
+      });
+      const boxRowSet = computed(() => new Set(boxRows.value));
+      const gridRowTemplate = computed(() => {
+        const h = gridRowHeight.value, parts = [];
+        let prev = 0;
+        for (const r of boxRows.value) {
+          if (r > prev) parts.push(`repeat(${r - prev}, ${h}px)`);
+          parts.push(`${h + GROUP_BOX_EXTRA}px`);
+          prev = r + 1;
+        }
+        if (gridTotalRows.value > prev) parts.push(`repeat(${gridTotalRows.value - prev}, ${h}px)`);
+        return parts.join(' ');
+      });
+      function gridRowTop(row) {
+        let n = 0;
+        for (const r of boxRows.value) { if (r < row) n++; else break; }
+        return row * gridRowStride.value + n * GROUP_BOX_EXTRA;
+      }
+      // Conservative bounds: extras only push rows further down, so dividing
+      // by the plain stride over-estimates the row and subtracting every extra under-estimates it.
+      const gridStartRow = computed(() => Math.max(0, Math.floor((gridScrollTop.value - boxRows.value.length * GROUP_BOX_EXTRA) / gridRowStride.value) - GRID_OVERSCAN_ROWS));
       const gridEndRow = computed(() => Math.min(
         gridTotalRows.value,
         Math.ceil((gridScrollTop.value + gridViewportHeight.value) / gridRowStride.value) + GRID_OVERSCAN_ROWS,
@@ -947,6 +973,9 @@
         while (end < rows.length && rows[end] < gridEndRow.value) end++;
         return gridEntries.value.slice(gridStartIndex.value, end);
       });
+      function rowHasBox(offset) {
+        return boxRowSet.value.has(gridLayout.value.rows[gridStartIndex.value + offset]);
+      }
       function tileGridPosition(offset) {
         const idx = gridStartIndex.value + offset;
         const { rows, cols, cs, rs } = gridLayout.value;
@@ -958,8 +987,8 @@
         if (idx === -1) idx = gridEntries.value.findIndex((e) => e.expanded && e.members.includes(path));
         if (idx === -1 || !gridAreaEl.value) return;
         const row = gridLayout.value.rows[idx];
-        const top = row * gridRowStride.value;
-        const bottom = top + gridRowHeight.value;
+        const top = gridRowTop(row);
+        const bottom = top + gridRowHeight.value + (boxRowSet.value.has(row) ? GROUP_BOX_EXTRA : 0);
         const el = gridAreaEl.value;
         if (top < el.scrollTop) el.scrollTop = Math.max(0, top - 8);
         else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight + 8;
@@ -1131,6 +1160,27 @@
         if (!added.length) return;
         g.memberPaths.push(...added);
         window.retriever.addToGroup(gid, added).catch((e) => toast(e.message));
+      }
+
+      function removeSelectionFromGroup(gid) {
+        const g = groupById.value.get(gid);
+        if (!g) return;
+        const removed = state.selection.filter((p) => g.memberPaths.includes(p));
+        if (!removed.length) return;
+        const remaining = g.memberPaths.filter((p) => !removed.includes(p));
+        if (!remaining.length) { ungroup(gid); return; }
+        g.memberPaths = remaining;
+        if (!remaining.includes(g.keyPath)) g.keyPath = remaining[0];
+        window.retriever.removeFromGroup(gid, removed).catch((e) => toast(e.message));
+      }
+      // Which dynamic action the expanded group's toolbar offers for the current
+      // selection: 'add' (only outside files), 'remove' (only members), or null.
+      function groupSelectionAction(gid) {
+        const g = groupById.value.get(gid);
+        if (!g || !state.selection.length) return null;
+        const inside = state.selection.filter((p) => g.memberPaths.includes(p)).length;
+        if (inside === 0) return 'add';
+        return inside === state.selection.length ? 'remove' : null;
       }
 
       // ---------- file ops ----------
@@ -1969,10 +2019,10 @@
         sheetSourceFiles, sheetGrid, sheetDims, sheetPerPage, sheetPages, sheetFilenameStem, sheetCurrentPageFiles,
         switchToSheet, switchToBrowse, toggleSheetView, toggleSheetSelect, selectAllSheetSource,
         clearSheetSelection, resetSheetLayout, sheetStepPage, exportContactSheet, sheetExportLabel, sheetExportPct,
-        gridAreaEl, onGridScroll, tileGridPosition, gridRowHeight, hasExpandedEntry, gridTotalRows,
+        gridAreaEl, onGridScroll, tileGridPosition, rowHasBox, gridRowHeight, gridRowTemplate, gridTotalRows,
         onTileClick, onGridAreaClick, selectSingle, selectAll, treeAutoExpandDepth, saveSession,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
-        rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup,
+        rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup, removeSelectionFromGroup, groupSelectionAction,
         duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, commitMassRename, revealInFinder,
         openPrivacySettings, openContainingFolder,
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
@@ -2176,10 +2226,10 @@
                 </div>
               </div>
 
-              <div class="tile-grid" :class="{ 'has-group-box': hasExpandedEntry }" :style="{ '--row-h': gridRowHeight + 'px' }">
+              <div class="tile-grid" :style="{ '--row-h': gridRowHeight + 'px', gridTemplateRows: gridRowTemplate }">
                 <template v-for="(entry, i) in renderedEntries" :key="entry.type === 'group' ? entry.group.id : entry.file.path">
 
-                  <div v-if="entry.type === 'file'" class="tile" :style="tileGridPosition(i)" :class="{ selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
+                  <div v-if="entry.type === 'file'" class="tile" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
                        @click="onTileClick($event, entry.file.path)" @dblclick="openViewer(entry.file.path)"
                        @contextmenu="openFileContextMenu($event, entry.file.path)">
                     <div class="tile-thumb">
@@ -2197,8 +2247,9 @@
 
                   <div v-else-if="entry.expanded" class="group-wrap" :style="tileGridPosition(i)">
                    <div class="group-actions">
+                     <span v-if="groupSelectionAction(entry.group.id) === 'add'" @click="addSelectionToGroup(entry.group.id)">add selection</span>
+                     <span v-else-if="groupSelectionAction(entry.group.id) === 'remove'" @click="removeSelectionFromGroup(entry.group.id)">ungroup selection</span>
                      <span @click="toggleExpand(entry.group.id)">collapse</span>
-                     <span @click="addSelectionToGroup(entry.group.id)">add selection</span>
                      <span @click="ungroup(entry.group.id)">ungroup</span>
                    </div>
                    <div class="group-band">
@@ -2212,7 +2263,7 @@
                   </div>
                   </div>
 
-                  <div v-else class="tile" :style="tileGridPosition(i)" :class="{ selected: state.selection.includes(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
+                  <div v-else class="tile" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
                     <div class="tile-stack">
                       <div class="stack-card">
                         <div class="layer layer1"></div>
