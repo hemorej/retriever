@@ -160,6 +160,11 @@ function addGroupMembers(db, groupId, fileIds) {
   for (const fid of fileIds) pos += ins.run(groupId, fid, pos).changes;
 }
 
+function removeGroupMembers(db, groupId, fileIds) {
+  const del = db.prepare('DELETE FROM group_members WHERE group_id = ? AND file_id = ?');
+  for (const fid of fileIds) del.run(groupId, fid);
+}
+
 // Every group with its currently-present members, as
 // [{ id, name, memberPaths, keyPath }]. Lost members (path NULL) are kept in
 // the table but omitted here; the first present member is the cover.
@@ -186,6 +191,7 @@ module.exports = {
   createGroup,
   deleteGroup,
   addGroupMembers,
+  removeGroupMembers,
   getAllGroups,
   openDb,
   getByPath,

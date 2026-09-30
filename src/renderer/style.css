@@ -257,11 +257,8 @@ body {
 }
 .tile-group-name { font-size: 10.5px; color: var(--text-muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.group-band { grid-column: 1 / -1; border: 1px solid rgba(230, 180, 34, .34); background: rgba(230, 180, 34, .06); border-radius: 8px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 9px; }
-.group-band-head { display: flex; align-items: center; gap: 9px; font-size: 11px; color: var(--accent-text); font-family: var(--font-mono); }
-.group-band-head .actions { margin-left: auto; color: var(--text-muted-2); display: flex; gap: 10px; }
-.group-band-head .actions span { cursor: pointer; }
-.group-band-head .actions span:hover { color: var(--text-primary); }
+.group-wrap { display: flex; flex-direction: column; gap: 4px; min-height: 0; min-width: 0; }
+.group-band { flex: 1; min-height: 0; min-width: 0; box-sizing: border-box; border: 1px solid rgba(230, 180, 34, .34); background: rgba(230, 180, 34, .06); border-radius: 8px; padding: 9px 12px 8px; display: flex; flex-direction: column; gap: 6px; }
 .group-band .tile-thumb { border-color: #332a12; }
 
 .context-menu {
@@ -493,3 +490,8 @@ body {
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #2a2a2c; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+.group-actions { height: 26px; flex: none; display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; font-size: 11px; font-family: var(--font-mono); color: var(--text-muted-2); white-space: nowrap; }
+.group-actions span { cursor: pointer; }
+.group-actions span:hover { color: var(--text-primary); }
+.tile-grid > .tile.box-pad { padding-top: 40px; box-sizing: border-box; }

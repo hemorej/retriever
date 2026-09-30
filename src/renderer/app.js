@@ -185,7 +185,7 @@
           </div>
           <div class="dialog-body">
             <input ref="input" class="res-field" style="width:100%;box-sizing:border-box" v-model="name"
-                   @keydown.enter="$emit('rename', name)" @keydown.esc="$emit('close')" />
+                   @keydown.enter.stop="$emit('rename', name)" @keydown.esc.stop="$emit('close')" />
           </div>
           <div class="dialog-footer">
             <div class="actions">
@@ -551,6 +551,7 @@
         contextMenu: reactive({ open: false, x: 0, y: 0, targetPath: null, isGroup: false, groupId: null }),
         folderContextMenu: reactive({ open: false, x: 0, y: 0, targetPath: null }),
         folderRenameDialog: reactive({ open: false, path: null }),
+        fileRenameDialog: reactive({ open: false, path: null }),
         folderDeleteDialog: reactive({ open: false, path: null }),
         fileDeleteDialog: reactive({ open: false, paths: [] }),
         tagMenu: reactive({ open: false, x: 0, y: 0 }),
@@ -596,6 +597,7 @@
       // tick instead of one Vue update per file.
       let eventQueue = [];
       let flushScheduled = false;
+      const pendingRenames = new Map(); // old path -> new path, for renames we initiated
       function queueFsEvent(evt) {
         eventQueue.push(evt);
         if (!flushScheduled) {
@@ -704,6 +706,12 @@
           counts.added += 1;
         } else if (evt.type === 'removed') {
           state.files.delete(evt.filePath);
+          const renamedTo = pendingRenames.get(evt.filePath);
+          if (renamedTo) {
+            pendingRenames.delete(evt.filePath);
+            const i = state.selection.indexOf(evt.filePath);
+            if (i !== -1) state.selection[i] = renamedTo;
+          }
           counts.removed += 1;
         } else if (evt.type === 'lost') {
           const f = state.files.get(evt.filePath);
@@ -851,10 +859,14 @@
         for (const f of sortedFiles.value) {
           const gid = groupMembership.value.get(f.path);
           if (gid) {
-            if (state.expandedGroups.has(gid) || seen.has(gid)) continue;
+            if (seen.has(gid)) continue;
             seen.add(gid);
             const g = groupById.value.get(gid);
-            entries.push({ type: 'group', group: g, cover: state.files.get(g.keyPath) || f });
+            // An expanded group stays at the slot of its first member and
+            // renders as a gold box spanning as many columns as it has members.
+            const expanded = state.expandedGroups.has(gid);
+            const members = expanded ? g.memberPaths.filter((p) => state.files.get(p)) : null;
+            entries.push({ type: 'group', group: g, cover: state.files.get(g.keyPath) || f, expanded, members });
           } else {
             entries.push({ type: 'file', file: f });
           }
@@ -886,32 +898,97 @@
         });
       }
       function measureTileRowExtra() {
-        const tile = document.querySelector('.tile-grid .tile');
-        if (!tile) return;
-        const extra = tile.offsetHeight - state.thumbSize;
+        const tile = document.querySelector('.tile-grid > .tile');
+        if (!tile || !tile.lastElementChild) return;
+        // Content height, not offsetHeight: the tile is stretched to the row,
+        // which would feed the group-box bonus back into the measurement.
+        const last = tile.lastElementChild;
+        const extra = Math.ceil(last.getBoundingClientRect().bottom - tile.firstElementChild.getBoundingClientRect().top) - state.thumbSize;
         if (extra > 0 && Math.abs(extra - tileRowExtra.value) > 1) tileRowExtra.value = extra;
       }
+      // An expanded group box hangs its action row and top padding above the
+      // thumbnails; plain tiles get matching top padding (.has-group-box) so
+      // all thumbnail top edges line up, and only the row the group starts on
+      // grows by GROUP_BOX_EXTRA; other rows keep the base height.
+      const GROUP_BOX_EXTRA = 48;
       const gridRowHeight = computed(() => state.thumbSize + tileRowExtra.value);
       const gridRowStride = computed(() => gridRowHeight.value + 16); // 16 = .tile-grid row gap
-      const gridTotalRows = computed(() => Math.ceil(gridEntries.value.length / GRID_COLS));
-      const gridStartRow = computed(() => Math.max(0, Math.floor(gridScrollTop.value / gridRowStride.value) - GRID_OVERSCAN_ROWS));
+      // Places every entry on the grid: plain tiles take one cell, an expanded
+      // group takes min(members, GRID_COLS) columns and enough rows to wrap.
+      const gridLayout = computed(() => {
+        const list = gridEntries.value;
+        const rows = new Array(list.length), cols = new Array(list.length), cs = new Array(list.length), rs = new Array(list.length);
+        let row = 0, col = 0;
+        for (let i = 0; i < list.length; i++) {
+          const e = list[i];
+          let c = 1, r = 1;
+          if (e.expanded) { c = Math.max(1, Math.min(e.members.length, GRID_COLS)); r = Math.max(1, Math.ceil(e.members.length / GRID_COLS)); }
+          if (col + c > GRID_COLS) { row++; col = 0; }
+          rows[i] = row; cols[i] = col; cs[i] = c; rs[i] = r;
+          if (r > 1) { row += r; col = 0; } else { col += c; if (col >= GRID_COLS) { row++; col = 0; } }
+        }
+        return { rows, cols, cs, rs, total: col > 0 ? row + 1 : row };
+      });
+      const gridTotalRows = computed(() => gridLayout.value.total);
+      // Sorted rows that carry the group-box bonus (the row each expanded group starts on).
+      const boxRows = computed(() => {
+        const { rows } = gridLayout.value;
+        const out = [];
+        gridEntries.value.forEach((e, i) => { if (e.expanded) out.push(rows[i]); });
+        return out;
+      });
+      const boxRowSet = computed(() => new Set(boxRows.value));
+      const gridRowTemplate = computed(() => {
+        const h = gridRowHeight.value, parts = [];
+        let prev = 0;
+        for (const r of boxRows.value) {
+          if (r > prev) parts.push(`repeat(${r - prev}, ${h}px)`);
+          parts.push(`${h + GROUP_BOX_EXTRA}px`);
+          prev = r + 1;
+        }
+        if (gridTotalRows.value > prev) parts.push(`repeat(${gridTotalRows.value - prev}, ${h}px)`);
+        return parts.join(' ');
+      });
+      function gridRowTop(row) {
+        let n = 0;
+        for (const r of boxRows.value) { if (r < row) n++; else break; }
+        return row * gridRowStride.value + n * GROUP_BOX_EXTRA;
+      }
+      // Conservative bounds: extras only push rows further down, so dividing
+      // by the plain stride over-estimates the row and subtracting every extra under-estimates it.
+      const gridStartRow = computed(() => Math.max(0, Math.floor((gridScrollTop.value - boxRows.value.length * GROUP_BOX_EXTRA) / gridRowStride.value) - GRID_OVERSCAN_ROWS));
       const gridEndRow = computed(() => Math.min(
         gridTotalRows.value,
         Math.ceil((gridScrollTop.value + gridViewportHeight.value) / gridRowStride.value) + GRID_OVERSCAN_ROWS,
       ));
-      const gridStartIndex = computed(() => gridStartRow.value * GRID_COLS);
-      const renderedEntries = computed(() => gridEntries.value.slice(gridStartIndex.value, gridEndRow.value * GRID_COLS));
+      const gridStartIndex = computed(() => {
+        const { rows, rs } = gridLayout.value;
+        let lo = 0, hi = rows.length;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (rows[mid] + rs[mid] > gridStartRow.value) hi = mid; else lo = mid + 1; }
+        return lo;
+      });
+      const renderedEntries = computed(() => {
+        const { rows } = gridLayout.value;
+        let end = gridStartIndex.value;
+        while (end < rows.length && rows[end] < gridEndRow.value) end++;
+        return gridEntries.value.slice(gridStartIndex.value, end);
+      });
+      function rowHasBox(offset) {
+        return boxRowSet.value.has(gridLayout.value.rows[gridStartIndex.value + offset]);
+      }
       function tileGridPosition(offset) {
         const idx = gridStartIndex.value + offset;
-        return { gridColumn: (idx % GRID_COLS) + 1, gridRow: Math.floor(idx / GRID_COLS) + 1 };
+        const { rows, cols, cs, rs } = gridLayout.value;
+        return { gridColumn: `${cols[idx] + 1} / span ${cs[idx]}`, gridRow: `${rows[idx] + 1} / span ${rs[idx]}` };
       }
 
       function ensureRowVisible(path) {
-        const idx = gridEntries.value.findIndex((e) => (e.type === 'file' ? e.file.path : e.group.keyPath) === path);
+        let idx = gridEntries.value.findIndex((e) => (e.type === 'file' ? e.file.path : e.group.keyPath) === path);
+        if (idx === -1) idx = gridEntries.value.findIndex((e) => e.expanded && e.members.includes(path));
         if (idx === -1 || !gridAreaEl.value) return;
-        const row = Math.floor(idx / GRID_COLS);
-        const top = row * gridRowStride.value;
-        const bottom = top + gridRowHeight.value;
+        const row = gridLayout.value.rows[idx];
+        const top = gridRowTop(row);
+        const bottom = top + gridRowHeight.value + (boxRowSet.value.has(row) ? GROUP_BOX_EXTRA : 0);
         const el = gridAreaEl.value;
         if (top < el.scrollTop) el.scrollTop = Math.max(0, top - 8);
         else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight + 8;
@@ -921,8 +998,10 @@
 
       const navOrder = computed(() => {
         const order = [];
-        for (const e of gridEntries.value) order.push(e.type === 'group' ? e.group.keyPath : e.file.path);
-        for (const g of expandedGroupList.value) for (const p of g.memberPaths) order.push(p);
+        for (const e of gridEntries.value) {
+          if (e.expanded) for (const p of e.members) order.push(p);
+          else order.push(e.type === 'group' ? e.group.keyPath : e.file.path);
+        }
         return order;
       });
 
@@ -1083,6 +1162,27 @@
         window.retriever.addToGroup(gid, added).catch((e) => toast(e.message));
       }
 
+      function removeSelectionFromGroup(gid) {
+        const g = groupById.value.get(gid);
+        if (!g) return;
+        const removed = state.selection.filter((p) => g.memberPaths.includes(p));
+        if (!removed.length) return;
+        const remaining = g.memberPaths.filter((p) => !removed.includes(p));
+        if (!remaining.length) { ungroup(gid); return; }
+        g.memberPaths = remaining;
+        if (!remaining.includes(g.keyPath)) g.keyPath = remaining[0];
+        window.retriever.removeFromGroup(gid, removed).catch((e) => toast(e.message));
+      }
+      // Which dynamic action the expanded group's toolbar offers for the current
+      // selection: 'add' (only outside files), 'remove' (only members), or null.
+      function groupSelectionAction(gid) {
+        const g = groupById.value.get(gid);
+        if (!g || !state.selection.length) return null;
+        const inside = state.selection.filter((p) => g.memberPaths.includes(p)).length;
+        if (inside === 0) return 'add';
+        return inside === state.selection.length ? 'remove' : null;
+      }
+
       // ---------- file ops ----------
       async function duplicateFiles(paths) {
         for (const p of paths) {
@@ -1118,7 +1218,23 @@
           toast(`${mode === 'move' ? 'Moved' : 'Copied'} ${result.length} file${result.length === 1 ? '' : 's'} to ${destDir}`);
         } catch (e) { toast(e.message); }
       }
+      // An untagged file's rename reaches us as removed+added (no `moved`),
+      // which would strand the selection on the dead old path and leave the
+      // active view (viewer, info strip) with no file to show. Remember the
+      // expected new path so the `removed` handler can carry the selection over.
+      async function renameTracked(p, newName) {
+        const newPath = dirname(p) + '/' + newName;
+        pendingRenames.set(p, newPath);
+        try {
+          return await window.retriever.renameFile(p, newName);
+        } catch (e) {
+          pendingRenames.delete(p);
+          throw e;
+        }
+      }
       function startInlineRename(p) {
+        // The viewer has no tile to edit in place, so use a dialog there.
+        if (state.viewMode === 'viewer') { state.fileRenameDialog.path = p; state.fileRenameDialog.open = true; return; }
         state.inlineRenamePath = p;
         state.inlineRenameValue = stripExt(p);
       }
@@ -1131,12 +1247,21 @@
         state.inlineRenamePath = null;
         if (!f || !newName || newName === f.name) return;
         try {
-          await window.retriever.renameFile(p, newName);
+          await renameTracked(p, newName);
         } catch (e) {
           toast(e.message);
         }
       }
       function cancelInlineRename() { state.inlineRenamePath = null; }
+      async function commitFileRename(newBase) {
+        const p = state.fileRenameDialog.path;
+        state.fileRenameDialog.open = false;
+        const f = state.files.get(p);
+        const ext = extname(p) ? '.' + extname(p) : '';
+        const newName = newBase.trim() + ext;
+        if (!f || !newBase.trim() || newName === f.name) return;
+        try { await renameTracked(p, newName); } catch (e) { toast(e.message); }
+      }
 
       // Defined as a real function rather than inline in the template: an
       // expression embedded directly in a `@rename="..."` attribute is
@@ -1146,7 +1271,7 @@
       // there, breaking `window.retriever.*`.
       async function commitMassRename(previews) {
         for (const p of previews) {
-          try { await window.retriever.renameFile(p.file.path, p.next); } catch (e) { toast(e.message); }
+          try { await renameTracked(p.file.path, p.next); } catch (e) { toast(e.message); }
         }
         state.renameDialogOpen = false;
       }
@@ -1715,6 +1840,7 @@
           else if (state.contextMenu.open) state.contextMenu.open = false;
           else if (state.folderContextMenu.open) state.folderContextMenu.open = false;
           else if (state.folderRenameDialog.open) state.folderRenameDialog.open = false;
+          else if (state.fileRenameDialog.open) state.fileRenameDialog.open = false;
           else if (state.folderDeleteDialog.open) state.folderDeleteDialog.open = false;
           else if (state.fileDeleteDialog.open) state.fileDeleteDialog.open = false;
           else if (state.tagMenu.open) state.tagMenu.open = false;
@@ -1812,6 +1938,20 @@
           if (el) { gridScrollTop.value = el.scrollTop; gridViewportHeight.value = el.clientHeight; gridResizeObserver.observe(el); }
         }, { immediate: true });
         watch(() => [state.thumbSize, renderedEntries.value.length], () => nextTick(measureTileRowExtra), { immediate: true });
+        // Keep the viewer's filmstrip centred on the active picture. Also
+        // re-runs when the strip's windowed contents shift or the viewer
+        // (re)mounts, since a fresh strip starts at scrollLeft 0.
+        watch(() => [activePath.value, state.viewMode, compareMode.value, filmstripOrder.value[0]], () => {
+          if (state.viewMode !== 'viewer') return;
+          const cell = document.querySelector('.filmstrip-cell.current');
+          const strip = cell && cell.parentElement;
+          if (!strip) return;
+          // .filmstrip isn't positioned, so offsetLeft would be relative to
+          // an ancestor — measure against the strip's own rect instead.
+          const c = cell.getBoundingClientRect();
+          const s = strip.getBoundingClientRect();
+          strip.scrollLeft += (c.left + c.width / 2) - (s.left + s.width / 2);
+        }, { flush: 'post', immediate: true });
         watch(() => activeTab.value && (activeTab.value.folderFilter || activeTab.value.rootDir), (dir) => {
           document.title = dir ? basename(dir) : 'Retriever';
         }, { immediate: true });
@@ -1879,15 +2019,15 @@
         sheetSourceFiles, sheetGrid, sheetDims, sheetPerPage, sheetPages, sheetFilenameStem, sheetCurrentPageFiles,
         switchToSheet, switchToBrowse, toggleSheetView, toggleSheetSelect, selectAllSheetSource,
         clearSheetSelection, resetSheetLayout, sheetStepPage, exportContactSheet, sheetExportLabel, sheetExportPct,
-        gridAreaEl, onGridScroll, tileGridPosition, gridRowHeight, gridTotalRows,
+        gridAreaEl, onGridScroll, tileGridPosition, rowHasBox, gridRowHeight, gridRowTemplate, gridTotalRows,
         onTileClick, onGridAreaClick, selectSingle, selectAll, treeAutoExpandDepth, saveSession,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
-        rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup,
+        rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup, removeSelectionFromGroup, groupSelectionAction,
         duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, commitMassRename, revealInFinder,
         openPrivacySettings, openContainingFolder,
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
         openFileContextMenu, handleContextAction, confirmFileDelete, commitFileDelete,
-        openFolderContextMenu, handleFolderContextAction, commitFolderRename, commitFolderDelete,
+        openFolderContextMenu, handleFolderContextAction, commitFolderRename, commitFileRename, commitFolderDelete,
         openViewer, backToGrid, stepViewer, ensureFileInfo,
         selectTab, addTab, closeTab, folderTree, selectFolder, subfolderEntries, loadSubfolders, otherFilesNote, previewSrc, gridThumbSrc,
         undo, onSliderPointerDown, onSheetSliderPointerDown, toast, onImageLoad,
@@ -2086,17 +2226,17 @@
                 </div>
               </div>
 
-              <div class="tile-grid" :style="{ '--row-h': gridRowHeight + 'px' }">
+              <div class="tile-grid" :style="{ '--row-h': gridRowHeight + 'px', gridTemplateRows: gridRowTemplate }">
                 <template v-for="(entry, i) in renderedEntries" :key="entry.type === 'group' ? entry.group.id : entry.file.path">
 
-                  <div v-if="entry.type === 'file'" class="tile" :style="tileGridPosition(i)" :class="{ selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
+                  <div v-if="entry.type === 'file'" class="tile" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
                        @click="onTileClick($event, entry.file.path)" @dblclick="openViewer(entry.file.path)"
                        @contextmenu="openFileContextMenu($event, entry.file.path)">
                     <div class="tile-thumb">
                       <img loading="lazy" :src="gridThumbSrc(entry.file.path)" :style="{ transform: 'rotate(' + (state.rotations[entry.file.path] || 0) + 'deg)' }" />
                     </div>
                     <div v-if="state.inlineRenamePath === entry.file.path" class="tile-rename" @click.stop>
-                      <input v-model="state.inlineRenameValue" @keydown.enter="commitInlineRename" @keydown.esc="cancelInlineRename" @blur="commitInlineRename" autofocus />
+                      <input v-model="state.inlineRenameValue" @keydown.enter.stop="commitInlineRename" @keydown.esc.stop="cancelInlineRename" @blur="commitInlineRename" autofocus />
                     </div>
                     <div v-else class="tile-name">
                       <span v-if="isNew(entry.file)" class="new-flag">new</span>
@@ -2105,7 +2245,25 @@
                     </div>
                   </div>
 
-                  <div v-else class="tile" :style="tileGridPosition(i)" :class="{ selected: state.selection.includes(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
+                  <div v-else-if="entry.expanded" class="group-wrap" :style="tileGridPosition(i)">
+                   <div class="group-actions">
+                     <span v-if="groupSelectionAction(entry.group.id) === 'add'" @click="addSelectionToGroup(entry.group.id)">add selection</span>
+                     <span v-else-if="groupSelectionAction(entry.group.id) === 'remove'" @click="removeSelectionFromGroup(entry.group.id)">ungroup selection</span>
+                     <span @click="toggleExpand(entry.group.id)">collapse</span>
+                     <span @click="ungroup(entry.group.id)">ungroup</span>
+                   </div>
+                   <div class="group-band">
+                    <div class="tile-grid" :style="{ '--row-h': 'auto', '--cols': Math.min(entry.members.length, 6) }">
+                      <div v-for="p in entry.members" :key="p" class="tile"
+                           :class="{ selected: state.selection.includes(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
+                        <div class="tile-thumb"><img :src="gridThumbSrc(p)" /></div>
+                        <div class="tile-name"><span class="fname">{{ state.files.get(p).name }}</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+
+                  <div v-else class="tile" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
                     <div class="tile-stack">
                       <div class="stack-card">
                         <div class="layer layer1"></div>
@@ -2123,27 +2281,7 @@
                      tiles: without a fixed grid-row, CSS grid would drop these
                      into whatever earlier row is currently unoccupied (i.e. any
                      scrolled-past virtualized row), not visually below the grid. -->
-                <div class="group-band" v-for="(g, gi) in expandedGroupList" :key="g.id" :style="{ gridRow: gridTotalRows + 1 + gi, gridColumn: '1 / -1' }">
-                  <div class="group-band-head">
-                    <span>▾ group "{{ g.name }}" · {{ g.memberPaths.length }} items</span>
-                    <span class="actions">
-                      <span @click="toggleExpand(g.id)">collapse</span>
-                      <span @click="addSelectionToGroup(g.id)">add selection</span>
-                      <span @click="ungroup(g.id)">ungroup</span>
-                    </span>
-                  </div>
-                  <div class="tile-grid" style="--thumb-h:104px; --row-h:auto">
-                    <template v-for="p in g.memberPaths" :key="p">
-                      <div v-if="state.files.get(p)" class="tile"
-                           :class="{ selected: state.selection.includes(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
-                        <div class="tile-thumb"><img :src="gridThumbSrc(p)" /></div>
-                        <div class="tile-name"><span class="fname">{{ state.files.get(p).name }}</span></div>
-                      </div>
-                    </template>
-                  </div>
-                </div>
-
-                <div class="grid-sizer" :style="{ gridColumn: 1, gridRow: gridTotalRows + 1 + expandedGroupList.length }"></div>
+                <div class="grid-sizer" :style="{ gridColumn: 1, gridRow: gridTotalRows + 1 }"></div>
               </div>
             </template>
 
@@ -2267,7 +2405,7 @@
           <template v-else-if="activeFile">
             <div class="viewer-body">
               <div class="viewer-stage">
-                <img :src="previewSrc(activeFile.path)" :style="{ transform: 'rotate(' + (state.rotations[activeFile.path] || 0) + 'deg)' }" @load="onImageLoad(activeFile, $event)" />
+                <img :src="previewSrc(activeFile.path)" :style="{ transform: 'rotate(' + (state.rotations[activeFile.path] || 0) + 'deg)' }" @load="onImageLoad(activeFile, $event)" @contextmenu="openFileContextMenu($event, activeFile.path)" />
               </div>
               <div class="filmstrip">
                 <div class="filmstrip-cell" v-for="p in filmstripOrder" :key="p" :class="{ current: p === activePath }" @click="selectSingle(p)">
@@ -2277,6 +2415,8 @@
             </div>
           </template>
 
+          <context-menu v-if="state.contextMenu.open" :x="state.contextMenu.x" :y="state.contextMenu.y"
+                         :can-group="state.selection.length >= 2" @action="handleContextAction"></context-menu>
           <tag-menu v-if="state.tagMenu.open" :x="state.tagMenu.x" :y="state.tagMenu.y" @pick="pickFromTagMenu" @click.stop></tag-menu>
         </div>
 
@@ -2475,6 +2615,9 @@
 
       <rename-dialog v-if="state.folderRenameDialog.open" title="Rename folder" :value="basename(state.folderRenameDialog.path)"
                      @close="state.folderRenameDialog.open = false" @rename="commitFolderRename"></rename-dialog>
+
+      <rename-dialog v-if="state.fileRenameDialog.open" title="Rename file" :value="stripExt(state.fileRenameDialog.path)"
+                     @close="state.fileRenameDialog.open = false" @rename="commitFileRename"></rename-dialog>
 
       <confirm-dialog v-if="state.fileDeleteDialog.open" title="Delete file"
                       :message="state.fileDeleteDialog.paths.length === 1 ? 'Move “' + basename(state.fileDeleteDialog.paths[0]) + '” to the Trash?' : 'Move ' + state.fileDeleteDialog.paths.length + ' files to the Trash?'"

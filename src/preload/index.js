@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('retriever', {
   createGroup: (name, filePaths) => ipcRenderer.invoke('create-group', { name, filePaths }),
   deleteGroup: (groupId) => ipcRenderer.invoke('delete-group', groupId),
   addToGroup: (groupId, filePaths) => ipcRenderer.invoke('add-to-group', { groupId, filePaths }),
+  removeFromGroup: (groupId, filePaths) => ipcRenderer.invoke('remove-from-group', { groupId, filePaths }),
   getAllGroups: () => ipcRenderer.invoke('get-all-groups'),
   getLostFiles: () => ipcRenderer.invoke('get-lost-files'),
   getFileInfo: (filePath) => ipcRenderer.invoke('get-file-info', filePath),
