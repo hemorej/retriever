@@ -8,15 +8,13 @@ const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-parentPort.on('message', ({ id, src, dest, maxDimension, quality }) => {
-  const tmpDest = path.join(os.tmpdir(), `retriever-thumb-${process.pid}-${id}.jpg`);
+parentPort.on('message', ({ id, src, dest, maxDimension, quality, format = 'jpeg' }) => {
+  const tmpDest = path.join(os.tmpdir(), `retriever-thumb-${process.pid}-${id}.${format === 'png' ? 'png' : 'jpg'}`);
   try {
-    execFileSync('sips', [
-      '-s', 'format', 'jpeg',
-      '-s', 'formatOptions', quality || 'normal',
-      '-Z', String(maxDimension),
-      src, '--out', tmpDest,
-    ], { stdio: 'ignore' });
+    const args = ['-s', 'format', format];
+    if (format === 'jpeg') args.push('-s', 'formatOptions', quality || 'normal');
+    args.push('-Z', String(maxDimension), src, '--out', tmpDest);
+    execFileSync('sips', args, { stdio: 'ignore' });
     fs.renameSync(tmpDest, dest);
     parentPort.postMessage({ id, ok: true });
   } catch (err) {

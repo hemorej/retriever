@@ -103,17 +103,19 @@ function shutdownThumbnailWorkers() {
 // export (main/index.js) passes a larger, per-sheet size instead, which
 // lands under its own cache key (see cacheKeyFor) rather than colliding with
 // or overwriting the grid's cached 440px copy of the same file.
-function getThumbnailPath(filePath, { maxDimension = THUMB_MAX_DIMENSION, quality = 'normal' } = {}) {
+async function getThumbnailPath(filePath, { maxDimension = THUMB_MAX_DIMENSION, quality = 'normal' } = {}) {
   let st;
   try {
-    st = fs.statSync(filePath);
+    st = await fs.promises.stat(filePath);
   } catch {
-    return Promise.resolve(null);
+    return null;
   }
   const key = cacheKeyFor(filePath, st.size, Math.round(st.mtimeMs), maxDimension, quality);
   const dest = path.join(cacheDir, `${key}.jpg`);
 
-  if (fs.existsSync(dest)) return Promise.resolve(dest);
+  // Everything below up to pending.set() runs synchronously, so two
+  // concurrent calls for the same key can't both miss `pending`.
+  if (await fs.promises.access(dest).then(() => true, () => false)) return dest;
   if (pending.has(key)) return pending.get(key);
 
   const id = ++jobIdCounter;
@@ -131,4 +133,29 @@ function getThumbnailPath(filePath, { maxDimension = THUMB_MAX_DIMENSION, qualit
   return promise;
 }
 
-module.exports = { initThumbnailCache, getThumbnailPath, shutdownThumbnailWorkers, THUMB_MAX_DIMENSION };
+// Full-size-ish PNG preview as a data URL, for formats <img> can't decode
+// (TIFF). Runs on the worker pool like thumbnails so it never blocks main, and
+// jumps the queue: someone is waiting on this one to open the viewer.
+function getPreviewDataUrl(filePath, maxDimension) {
+  const id = ++jobIdCounter;
+  const dest = path.join(os.tmpdir(), `retriever-preview-${process.pid}-${id}.png`);
+  return new Promise((resolve, reject) => {
+    jobCallbacks.set(id, { resolve, reject });
+    jobQueue.unshift({ id, src: filePath, dest, maxDimension, format: 'png' });
+    pump();
+  }).then(
+    async () => {
+      try {
+        return `data:image/png;base64,${(await fs.promises.readFile(dest)).toString('base64')}`;
+      } finally {
+        fs.promises.unlink(dest).catch(() => {});
+      }
+    },
+    (err) => {
+      fs.promises.unlink(dest).catch(() => {});
+      throw err;
+    },
+  );
+}
+
+module.exports = { initThumbnailCache, getThumbnailPath, getPreviewDataUrl, shutdownThumbnailWorkers, THUMB_MAX_DIMENSION };

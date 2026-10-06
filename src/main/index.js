@@ -7,7 +7,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron')
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFile, execFileSync } = require('child_process');
+const { execFile } = require('child_process');
 const db = require('./db');
 const { createWatcher, ensureTracked } = require('./watcher');
 const { stripBuffer } = require('./metadata');
@@ -30,24 +30,6 @@ let sessionPath;
 
 const EXTERNAL_EDITOR_APP = '/Applications/Affinity Photo 2.app';
 const PREVIEW_MAX_DIMENSION = 2000;
-
-// child_process.execFile's async spawn reliably throws a synchronous
-// "spawn EBADF" here — a posix_spawn/libuv fd issue specific to spawning
-// from an Electron 43 main process on macOS, reproducible on every call,
-// not just under load. execFileSync doesn't hit it (different underlying
-// spawn path), so that's what get-image-preview uses; the tradeoff is
-// blocking the main process for the call's duration (a couple hundred ms),
-// which is what would otherwise have been spent awaiting it anyway.
-function runSips(filePath) {
-  const tmpPath = path.join(os.tmpdir(), `retriever-preview-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
-  try {
-    execFileSync('sips', ['-s', 'format', 'png', '-Z', String(PREVIEW_MAX_DIMENSION), filePath, '--out', tmpPath], { stdio: 'ignore' });
-    const buf = fs.readFileSync(tmpPath);
-    return `data:image/png;base64,${buf.toString('base64')}`;
-  } finally {
-    fs.promises.unlink(tmpPath).catch(() => {});
-  }
-}
 
 // Same "-2, -3, …" collision scheme as duplicate-file, generalized to an
 // arbitrary destination directory (move/copy land files there, possibly
@@ -205,9 +187,9 @@ app.whenReady().then(() => {
   // so the renderer asks main for these instead of reading them locally.
   ipcMain.handle('get-home-dir', () => os.homedir());
 
-  ipcMain.handle('get-file-info', (_event, filePath) => {
+  ipcMain.handle('get-file-info', async (_event, filePath) => {
     try {
-      const st = fs.statSync(filePath);
+      const st = await fs.promises.stat(filePath);
       return { size: st.size, mtimeMs: st.mtimeMs };
     } catch {
       return null;
@@ -408,8 +390,9 @@ app.whenReady().then(() => {
   // preview. Shelling out to macOS's built-in `sips` converts (and, via
   // -Z, downsamples) to PNG in one call, with no new dependency. Everything
   // else still loads straight from disk via file:// (see fileUrl in app.js).
-  // See runSips above for why this is a sync spawn.
-  ipcMain.handle('get-image-preview', (_event, filePath) => runSips(filePath));
+  // Runs on the thumbnail worker pool (spawning `sips` from Electron's main
+  // process fails with EBADF, and a sync spawn here would block all IPC).
+  ipcMain.handle('get-image-preview', (_event, filePath) => thumbnails.getPreviewDataUrl(filePath, PREVIEW_MAX_DIMENSION));
 
   // Small, downscaled, disk-cached thumbnail for grid tiles — see
   // thumbnails.js. Distinct from get-image-preview above, which produces a

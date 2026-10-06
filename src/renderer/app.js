@@ -1910,11 +1910,9 @@
         });
       }
       // Also used by the viewer's filmstrip cells — those must stay on the
-      // cheap async thumbnail path, not previewSrc/get-image-preview, which
-      // shells out to `sips` synchronously (see runSips in main/index.js)
-      // and blocks the whole main process for each call; firing that per
-      // filmstrip cell froze the app on every IPC round-trip afterwards,
-      // including the grid's own get-thumbnail calls when returning to it.
+      // cheap, cached thumbnail path, not previewSrc/get-image-preview, which
+      // renders a 2000px PNG per call (jumping the worker queue ahead of the
+      // grid's thumbnails); firing that per filmstrip cell would starve them.
       function gridThumbSrc(p) {
         if (!p) return '';
         const cached = state.gridThumbs.get(p);
