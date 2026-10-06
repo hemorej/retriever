@@ -658,7 +658,9 @@
         eventQueue.push(evt);
         if (!flushScheduled) {
           flushScheduled = true;
-          setTimeout(flushFsEvents, 50);
+          // The initial scan emits thousands of events and every flush
+          // re-derives the whole grid, so batch coarser while indexing.
+          setTimeout(flushFsEvents, state.indexing.active ? 300 : 50);
         }
       }
       function flushFsEvents() {
@@ -882,11 +884,7 @@
       });
 
       const visibleFiles = computed(() => {
-        let list = allFiles.value;
-        if (state.folderFilter) {
-          list = list.filter((f) => f.dir === state.folderFilter ||
-            (state.filters.includeSubfolders && f.dir.startsWith(state.folderFilter + '/')));
-        }
+        let list = folderFiles.value; // same folder scoping, already computed once
         if (state.search.trim()) {
           const q = state.search.trim().toLowerCase();
           list = list.filter((f) => f.name.toLowerCase().includes(q));
@@ -902,15 +900,20 @@
         return list;
       });
 
+      // One shared Collator: String.prototype.localeCompare builds locale
+      // machinery per call, which dominates sorting tens of thousands of names.
+      const nameCollator = new Intl.Collator();
       const sortedFiles = computed(() => {
         const list = [...visibleFiles.value];
         const dir = state.sortDir === 'asc' ? 1 : -1;
-        list.sort((a, b) => {
-          if (state.sortMode === 'name') return a.name.localeCompare(b.name) * dir;
-          return (a.mtimeMs - b.mtimeMs) * dir;
-        });
+        if (state.sortMode === 'name') list.sort((a, b) => nameCollator.compare(a.name, b.name) * dir);
+        else list.sort((a, b) => (a.mtimeMs - b.mtimeMs) * dir);
         return list;
       });
+
+      // Tiles ask "is this selected?" for every mounted cell on every render;
+      // a Set makes that O(1) instead of scanning the selection each time.
+      const selectionSet = computed(() => new Set(state.selection));
 
       const gridEntries = computed(() => {
         const entries = [];
@@ -2129,7 +2132,7 @@
         TAGS, tagMeta, extname, basename, stripExt,
         chooseFolder, useDefaultFolder, beginWatch,
         groupMembership, groupById, allFiles, tagCounts, typeCounts, visibleFiles, sortedFiles,
-        gridEntries, renderedEntries, expandedGroupList, navOrder, filmstripOrder, activePath, activeFile, activeGroupId, systemState, isNew,
+        gridEntries, renderedEntries, selectionSet, expandedGroupList, navOrder, filmstripOrder, activePath, activeFile, activeGroupId, systemState, isNew,
         compareMode, compareGridDims, comparableSelectionCount, openCompareView, exitCompareToSingle,
         sheetSourceFiles, sheetGrid, sheetDims, sheetPerPage, sheetPages, sheetFilenameStem, sheetCurrentPageFiles,
         switchToSheet, switchToBrowse, toggleSheetView, toggleSheetSelect, selectAllSheetSource,
@@ -2344,7 +2347,7 @@
               <div class="tile-grid" :style="{ '--row-h': gridRowHeight + 'px', gridTemplateRows: gridRowTemplate }">
                 <template v-for="(entry, i) in renderedEntries" :key="entry.type === 'group' ? entry.group.id : entry.file.path">
 
-                  <div v-if="entry.type === 'file'" class="tile" draggable="true" @dragstart="onTileDragStart($event, entry.file.path)" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
+                  <div v-if="entry.type === 'file'" class="tile" draggable="true" @dragstart="onTileDragStart($event, entry.file.path)" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: selectionSet.has(entry.file.path), new: isNew(entry.file) }"
                        @click="onTileClick($event, entry.file.path)" @dblclick="openViewer(entry.file.path)"
                        @contextmenu="openFileContextMenu($event, entry.file.path)">
                     <div class="tile-thumb">
@@ -2370,7 +2373,7 @@
                    <div class="group-band">
                     <div class="tile-grid" :style="{ '--row-h': 'auto', '--cols': Math.min(entry.members.length, 6) }">
                       <div v-for="p in entry.members" :key="p" class="tile"
-                           :class="{ selected: state.selection.includes(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
+                           :class="{ selected: selectionSet.has(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
                         <div class="tile-thumb"><img :src="gridThumbSrc(p)" /></div>
                         <div class="tile-name"><span class="fname">{{ state.files.get(p).name }}</span></div>
                       </div>
@@ -2378,7 +2381,7 @@
                   </div>
                   </div>
 
-                  <div v-else class="tile" draggable="true" @dragstart="onTileDragStart($event, entry.group.keyPath)" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
+                  <div v-else class="tile" draggable="true" @dragstart="onTileDragStart($event, entry.group.keyPath)" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: selectionSet.has(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
                     <div class="tile-stack">
                       <div class="stack-card">
                         <div class="layer layer1"></div>
