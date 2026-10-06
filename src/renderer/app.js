@@ -760,6 +760,9 @@
             info: null, dims: null, size: evt.size, mtimeMs: evt.mtimeMs,
           });
           counts.added += 1;
+        } else if (evt.type === 'changed') {
+          const f = state.files.get(evt.filePath);
+          if (f) { f.size = evt.size; f.mtimeMs = evt.mtimeMs; }
         } else if (evt.type === 'removed') {
           state.files.delete(evt.filePath);
           const renamedTo = pendingRenames.get(evt.filePath);

@@ -1,7 +1,8 @@
 const chokidar = require('chokidar');
 const db = require('./db');
-const { hashFile, statSync } = require('./hash');
+const { hashFile, statAsync } = require('./hash');
 
+const DOTFILE = /(^|[/\\])\../;
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff']);
 
 function isImage(filePath) {
@@ -32,11 +33,20 @@ function createWatcher({ rootDir, database, onEvent }) {
     // cut needless CPU/event overhead. Once a thumbnail cache directory
     // exists it must be excluded here too, or the app ends up watching its
     // own cache writes.
-    ignored: /(^|[/\\])\../,
+    // Non-image files (raw/video/documents) are skipped here so they never
+    // become events at all; `stats` is undefined on chokidar's first probe of
+    // a path, in which case it's left alone (it may be a directory).
+    ignored: (p, stats) => DOTFILE.test(p) || !!(stats && stats.isFile() && !isImage(p)),
+    // Hand 'add'/'change' the stats chokidar already collected instead of
+    // stat-ing every file a second time during the initial scan.
+    alwaysStat: true,
     // useFsEvents (macOS) / native backends stay on by default — polling
     // would burn CPU continuously and is only a fallback for filesystems
     // that don't support native watch events (e.g. some network mounts).
-    awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
+    // awaitWriteFinish is deliberately off: it stat-polls every file (the
+    // initial scan included) and delays each 'add' by its stability window.
+    // Nothing here reads file contents on add, and a file still being written
+    // is corrected by the 'change' handler below.
   });
 
   // db.markLost() nulls out a row's path column (that's what "lost" means
@@ -46,16 +56,22 @@ function createWatcher({ rootDir, database, onEvent }) {
   // real `from` in its 'moved' event instead of null.
   const lastKnownPath = new Map();
 
-  watcher.on('add', (filePath) => handleAdd(filePath));
+  watcher.on('add', (filePath, stats) => handleAdd(filePath, stats));
+  watcher.on('change', (filePath, stats) => handleChange(filePath, stats));
   watcher.on('unlink', (filePath) => handleUnlink(filePath));
   watcher.on('error', (err) => onEvent({ type: 'error', message: err.message, code: err.code }));
   watcher.on('ready', () => onEvent({ type: 'ready' }));
 
-  async function handleAdd(filePath) {
+  async function handleAdd(filePath, stats) {
     if (!isImage(filePath)) return;
 
-    const { size, mtimeMs } = statSync(filePath);
-    const candidates = db.getLost(database).filter((row) => row.size === size);
+    let size, mtimeMs;
+    try {
+      ({ size, mtimeMs } = stats ? { size: stats.size, mtimeMs: Math.round(stats.mtimeMs) } : await statAsync(filePath));
+    } catch {
+      return; // vanished between the event and the stat; unlink will follow
+    }
+    const candidates = db.getLostBySize(database, size);
 
     for (const candidate of candidates) {
       const hash = await hashFile(filePath);
@@ -69,6 +85,16 @@ function createWatcher({ rootDir, database, onEvent }) {
     }
 
     onEvent({ type: 'added', filePath, size, mtimeMs, tracked: false });
+  }
+
+  async function handleChange(filePath, stats) {
+    if (!isImage(filePath)) return;
+    try {
+      const { size, mtimeMs } = stats ? { size: stats.size, mtimeMs: Math.round(stats.mtimeMs) } : await statAsync(filePath);
+      onEvent({ type: 'changed', filePath, size, mtimeMs });
+    } catch {
+      // Gone again; the unlink event covers it.
+    }
   }
 
   function handleUnlink(filePath) {
@@ -93,7 +119,7 @@ async function ensureTracked(database, filePath) {
   const existing = db.getByPath(database, filePath);
   if (existing) return existing;
 
-  const { size, mtimeMs } = statSync(filePath);
+  const { size, mtimeMs } = await statAsync(filePath);
   const hash = await hashFile(filePath);
 
   const byHash = db.getByHash(database, hash);

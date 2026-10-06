@@ -47,7 +47,7 @@ isn't pure JS has to go through `src/preload/index.js` → IPC → main.
   layer multiple roots. `startWatching()` is the one place that changes.
 - **`src/main/watcher.js`** — chokidar wrapped with the identity model
   (see below) and normalized into `{type, ...}` events forwarded to the
-  renderer as a single `fs-event` IPC channel. Event types: `added`,
+  renderer as a single `fs-event` IPC channel. Event types: `added`, `changed`,
   `removed`, `lost`, `moved`, `ready`, `error`.
 - **`src/main/db.js`** — better-sqlite3, schema inline in the file. Tables:
   `files` (hash-keyed), `tags`, `file_tags`, `groups`, `group_members`.

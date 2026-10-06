@@ -23,4 +23,9 @@ function statSync(filePath) {
   return { size: st.size, mtimeMs: Math.round(st.mtimeMs) };
 }
 
-module.exports = { hashFile, statSync };
+async function statAsync(filePath) {
+  const st = await fs.promises.stat(filePath);
+  return { size: st.size, mtimeMs: Math.round(st.mtimeMs) };
+}
+
+module.exports = { hashFile, statSync, statAsync };

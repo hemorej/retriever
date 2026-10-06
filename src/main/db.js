@@ -61,6 +61,18 @@ function getByHash(db, hash) {
   return db.prepare('SELECT * FROM files WHERE hash = ?').get(hash);
 }
 
+// Same as getLost() filtered to one size, in SQL — called once per file the
+// watcher sees, so it can't afford to load and filter every lost row in JS.
+const lostBySizeStmts = new WeakMap();
+function getLostBySize(db, size) {
+  let stmt = lostBySizeStmts.get(db);
+  if (!stmt) {
+    stmt = db.prepare('SELECT * FROM files WHERE path IS NULL AND size = ?');
+    lostBySizeStmts.set(db, stmt);
+  }
+  return stmt.all(size);
+}
+
 function getLost(db) {
   return db.prepare('SELECT * FROM files WHERE path IS NULL').all();
 }
@@ -197,6 +209,7 @@ module.exports = {
   getByPath,
   getByHash,
   getLost,
+  getLostBySize,
   insertFile,
   markLost,
   reattachPath,
