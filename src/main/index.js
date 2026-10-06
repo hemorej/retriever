@@ -274,35 +274,56 @@ app.whenReady().then(() => {
     return result.filePaths[0];
   });
 
+  // Which of these files would collide with something already in destDir.
+  // A move onto a file's own folder is a no-op, not a conflict; a copy there
+  // just makes a numbered duplicate (see transferFiles), so neither is listed.
+  ipcMain.handle('find-transfer-conflicts', (_event, { filePaths, destDir }) =>
+    filePaths.filter((p) => path.dirname(p) !== destDir && fs.existsSync(path.join(destDir, path.basename(p)))));
+
+  // `resolutions` maps a source path to 'replace' | 'skip' | 'keep' for files
+  // that collide at the destination (see find-transfer-conflicts); anything
+  // unlisted is kept alongside under a unique name. 'replace' sends the
+  // existing file to the Trash rather than overwriting, so it's recoverable.
+  // One file failing doesn't abort the rest — failures are reported back.
+  async function transferFiles(mode, filePaths, destDir, resolutions = {}) {
+    const result = { done: [], replaced: 0, renamed: 0, skipped: 0, failed: [] };
+    for (const filePath of filePaths) {
+      const sameDir = path.dirname(filePath) === destDir;
+      if (sameDir && mode === 'move') continue; // already there
+      const target = path.join(destDir, path.basename(filePath));
+      const action = sameDir ? undefined : resolutions[filePath];
+      try {
+        if (action === 'skip' && fs.existsSync(target)) { result.skipped += 1; continue; }
+        // Never trash a directory that merely shares the file's name.
+        const replacing = action === 'replace' && fs.existsSync(target) && fs.statSync(target).isFile();
+        if (replacing) await shell.trashItem(target);
+        const dest = replacing ? target : uniqueDestPath(destDir, filePath);
+        if (mode === 'copy') {
+          await fs.promises.copyFile(filePath, dest);
+        } else {
+          try {
+            await fs.promises.rename(filePath, dest);
+          } catch (err) {
+            if (err.code !== 'EXDEV') throw err; // cross-device: rename() can't do it, fall back to copy+delete
+            await fs.promises.copyFile(filePath, dest);
+            await fs.promises.unlink(filePath);
+          }
+        }
+        result.done.push(dest);
+        if (replacing) result.replaced += 1;
+        else if (dest !== target) result.renamed += 1;
+      } catch (err) {
+        result.failed.push({ filePath, error: err.message });
+      }
+    }
+    return result;
+  }
+
   // Moves that land back in the currently watched root are picked up by the
   // watcher as an unlink/add pair and re-identified by content hash (see
   // watcher.js) — this handler just performs the fs operation.
-  ipcMain.handle('move-files', async (_event, { filePaths, destDir }) => {
-    const moved = [];
-    for (const filePath of filePaths) {
-      if (path.dirname(filePath) === destDir) continue; // already there
-      const dest = uniqueDestPath(destDir, filePath);
-      try {
-        await fs.promises.rename(filePath, dest);
-      } catch (err) {
-        if (err.code !== 'EXDEV') throw err; // cross-device: rename() can't do it, fall back to copy+delete
-        await fs.promises.copyFile(filePath, dest);
-        await fs.promises.unlink(filePath);
-      }
-      moved.push(dest);
-    }
-    return moved;
-  });
-
-  ipcMain.handle('copy-files', async (_event, { filePaths, destDir }) => {
-    const copied = [];
-    for (const filePath of filePaths) {
-      const dest = uniqueDestPath(destDir, filePath);
-      await fs.promises.copyFile(filePath, dest);
-      copied.push(dest);
-    }
-    return copied;
-  });
+  ipcMain.handle('move-files', (_event, { filePaths, destDir, resolutions }) => transferFiles('move', filePaths, destDir, resolutions));
+  ipcMain.handle('copy-files', (_event, { filePaths, destDir, resolutions }) => transferFiles('copy', filePaths, destDir, resolutions));
 
   ipcMain.handle('strip-metadata', async (_event, { filePaths, options }) => {
     const results = [];

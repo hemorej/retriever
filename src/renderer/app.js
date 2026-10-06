@@ -92,7 +92,8 @@
       subfolders: Object, expanded: Object, loadSubfolders: Function,
       autoExpandDepth: { type: Number, default: 2 }, persistExpansion: Function,
     },
-    emits: ['select', 'contextmenu'],
+    emits: ['select', 'contextmenu', 'drop-files'],
+    data() { return { dragOver: false }; },
     computed: {
       open() { return this.expanded.has(this.node.path); },
       childList() {
@@ -116,11 +117,33 @@
         this.expanded.has(this.node.path) ? this.expanded.delete(this.node.path) : this.expanded.add(this.node.path);
         if (this.persistExpansion) this.persistExpansion();
       },
+      // Only react to drags that carry tiles from the grid (see onTileDragStart),
+      // not arbitrary text/files dragged in from elsewhere.
+      isTileDrag(e) { return e.dataTransfer && Array.from(e.dataTransfer.types).includes('application/x-retriever-files'); },
+      onDragOver(e) {
+        if (!this.isTileDrag(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        this.dragOver = true;
+      },
+      onDragLeave(e) {
+        if (e.currentTarget.contains(e.relatedTarget)) return; // moved onto a child span, still inside the row
+        this.dragOver = false;
+      },
+      onDrop(e) {
+        this.dragOver = false;
+        if (!this.isTileDrag(e)) return;
+        e.preventDefault();
+        let paths;
+        try { paths = JSON.parse(e.dataTransfer.getData('application/x-retriever-files')); } catch (_) { return; }
+        if (Array.isArray(paths) && paths.length) this.$emit('drop-files', paths, this.node.path);
+      },
     },
     template: `
       <div>
-        <div class="tree-row" :class="{ current: node.path === activePath }" :style="{ paddingLeft: (8 + depth * 14) + 'px' }"
-             @click="$emit('select', node.path)" @contextmenu.prevent="$emit('contextmenu', $event, node.path)">
+        <div class="tree-row" :class="{ current: node.path === activePath, 'drop-target': dragOver }" :style="{ paddingLeft: (8 + depth * 14) + 'px' }"
+             @click="$emit('select', node.path)" @contextmenu.prevent="$emit('contextmenu', $event, node.path)"
+             @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
           <span class="disclosure" v-if="childList.length" @click.stop="toggle">{{ open ? '▾' : '▸' }}</span>
           <span class="disclosure" v-else></span>
           <span class="subdir-dot" v-if="childList.length">·</span>
@@ -131,7 +154,8 @@
           <tree-node v-for="c in childList" :key="c.path" :node="c" :depth="depth + 1" :active-path="activePath"
                      :subfolders="subfolders" :expanded="expanded" :load-subfolders="loadSubfolders" :auto-expand-depth="autoExpandDepth"
                      :persist-expansion="persistExpansion" @select="$emit('select', $event)"
-                     @contextmenu="(e, p) => $emit('contextmenu', e, p)"></tree-node>
+                     @contextmenu="(e, p) => $emit('contextmenu', e, p)"
+                     @drop-files="(paths, dest) => $emit('drop-files', paths, dest)"></tree-node>
         </template>
       </div>`,
   };
@@ -191,6 +215,37 @@
             <div class="actions">
               <div class="btn ghost" @click="$emit('close')">Cancel</div>
               <div class="btn accent" @click="$emit('rename', name)">Rename</div>
+            </div>
+          </div>
+        </div>
+      </div>`,
+  };
+
+  // Asked once per colliding file during a move; `remaining` is how many more
+  // collisions follow, so "apply to all" can say what it will cover.
+  const ConflictDialog = {
+    props: { name: String, destName: String, remaining: Number, mode: String },
+    emits: ['choose', 'cancel'],
+    data() { return { applyAll: false }; },
+    template: `
+      <div class="overlay">
+        <div class="dialog" style="width:430px">
+          <div class="dialog-head">
+            <span class="title">File already exists</span>
+            <span class="close" @click="$emit('cancel')">×</span>
+          </div>
+          <div class="dialog-body">
+            <div class="md-kept-note">“{{ name }}” already exists in “{{ destName }}”. Replace sends the existing file to the Trash.</div>
+            <label v-if="remaining > 0" style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+              <input type="checkbox" v-model="applyAll" /> Apply to all {{ remaining }} remaining conflict{{ remaining === 1 ? '' : 's' }}
+            </label>
+          </div>
+          <div class="dialog-footer">
+            <div class="actions">
+              <div class="btn ghost" @click="$emit('cancel')">Cancel {{ mode }}</div>
+              <div class="btn" @click="$emit('choose', 'skip', applyAll)">Skip</div>
+              <div class="btn" @click="$emit('choose', 'keep', applyAll)">Keep both</div>
+              <div class="btn danger" @click="$emit('choose', 'replace', applyAll)">Replace</div>
             </div>
           </div>
         </div>
@@ -519,7 +574,7 @@
 
   // ---------- root app ----------
   const App = {
-    components: { AppMark, Toast, ContextMenu, FolderContextMenu, RenameDialog, ConfirmDialog, TagMenu, FilterPanel, MassRenameDialog, CleanupDialog, ShortcutsSheet },
+    components: { AppMark, Toast, ContextMenu, FolderContextMenu, RenameDialog, ConfirmDialog, ConflictDialog, TagMenu, FilterPanel, MassRenameDialog, CleanupDialog, ShortcutsSheet },
     setup() {
       const state = reactive({
         tabs: [{ id: uid('tab'), rootDir: null, watching: false, label: 'Untitled', expandedFolders: null, sheet: defaultSheet() }],
@@ -551,6 +606,7 @@
         contextMenu: reactive({ open: false, x: 0, y: 0, targetPath: null, isGroup: false, groupId: null }),
         folderContextMenu: reactive({ open: false, x: 0, y: 0, targetPath: null }),
         folderRenameDialog: reactive({ open: false, path: null }),
+        conflictPrompt: reactive({ open: false, name: '', destName: '', remaining: 0, mode: 'move' }),
         fileRenameDialog: reactive({ open: false, path: null }),
         folderDeleteDialog: reactive({ open: false, path: null }),
         fileDeleteDialog: reactive({ open: false, paths: [] }),
@@ -1209,13 +1265,70 @@
       async function moveOrCopySelection(mode) {
         // Spread to a plain array — state.selection is a Vue reactive Proxy,
         // and Electron's IPC structured-clone can't serialize that directly.
-        const paths = [...(state.selection.length ? state.selection : (state.contextMenu.targetPath ? [state.contextMenu.targetPath] : []))];
+        const paths = expandGroups(state.selection.length ? state.selection : (state.contextMenu.targetPath ? [state.contextMenu.targetPath] : []));
         if (!paths.length) return;
         const destDir = await window.retriever.chooseDestinationFolder();
         if (!destDir) return;
+        return transferFilesTo(mode, paths, destDir);
+      }
+      // ---------- drag tiles onto a tree folder ----------
+      // Dragging an unselected tile drags just that tile; dragging a selected
+      // one drags the whole selection. Group tiles stand in for all members.
+      function onTileDragStart(e, p) {
+        if (!state.selection.includes(p)) selectSingle(p);
+        const paths = expandGroups(state.selection);
+        e.dataTransfer.setData('application/x-retriever-files', JSON.stringify(paths));
+        e.dataTransfer.effectAllowed = 'move';
+      }
+      // Group tiles are selected by their key file but stand in for every member.
+      function expandGroups(paths) {
+        const out = [];
+        for (const sp of paths) {
+          const g = state.groups.find((g) => g.keyPath === sp);
+          for (const q of (g ? g.memberPaths : [sp])) if (!out.includes(q)) out.push(q);
+        }
+        return out;
+      }
+      // Resolves with { action, applyAll }, or null if the user cancels.
+      let conflictResolve = null;
+      function askConflict(name, destName, remaining, mode) {
+        Object.assign(state.conflictPrompt, { open: true, name, destName, remaining, mode });
+        return new Promise((resolve) => { conflictResolve = resolve; });
+      }
+      function answerConflict(action, applyAll) {
+        state.conflictPrompt.open = false;
+        if (conflictResolve) conflictResolve(action ? { action, applyAll } : null);
+        conflictResolve = null;
+      }
+      // The one move/copy path — context menu, ⌘⌥M/⌘⌥C and drag-to-folder all land here.
+      // Collisions are all resolved up front so cancelling leaves everything untouched.
+      async function transferFilesTo(mode, paths, destDir) {
+        const destName = basename(destDir) || destDir;
         try {
-          const result = mode === 'move' ? await window.retriever.moveFiles(paths, destDir) : await window.retriever.copyFiles(paths, destDir);
-          toast(`${mode === 'move' ? 'Moved' : 'Copied'} ${result.length} file${result.length === 1 ? '' : 's'} to ${destDir}`);
+          const conflicts = await window.retriever.findTransferConflicts(paths, destDir);
+          const resolutions = {};
+          for (let i = 0; i < conflicts.length; i++) {
+            const choice = await askConflict(basename(conflicts[i]), destName, conflicts.length - i - 1, mode);
+            if (!choice) return;
+            for (const c of choice.applyAll ? conflicts.slice(i) : [conflicts[i]]) resolutions[c] = choice.action;
+            if (choice.applyAll) break;
+          }
+          const r = await window.retriever[mode === 'move' ? 'moveFiles' : 'copyFiles'](paths, destDir, resolutions);
+          const moved = r.done.length;
+          if (mode === 'move' && moved) state.selection = [];
+          const verb = mode === 'move' ? 'moved' : 'copied';
+          const notes = [];
+          if (r.replaced) notes.push(`${r.replaced} replaced`);
+          if (r.renamed) notes.push(`${r.renamed} kept both`);
+          if (r.skipped) notes.push(`${r.skipped} skipped`);
+          const suffix = notes.length ? ` (${notes.join(', ')})` : '';
+          if (r.failed.length) {
+            toast(`${moved}/${moved + r.failed.length} ${verb}, ${r.failed.length} failed${suffix}: ${r.failed[0].error}`);
+          } else if (moved) {
+            toast(`${mode === 'move' ? 'Moved' : 'Copied'} ${moved} file${moved === 1 ? '' : 's'} to ${destName}${suffix}`);
+          } else if (r.skipped) {
+            toast(`Nothing ${verb}${suffix}`);
+          }
         } catch (e) { toast(e.message); }
       }
       // An untagged file's rename reaches us as removed+added (no `moved`),
@@ -1839,6 +1952,7 @@
           if (state.shortcutsHeld) state.shortcutsHeld = false;
           else if (state.contextMenu.open) state.contextMenu.open = false;
           else if (state.folderContextMenu.open) state.folderContextMenu.open = false;
+          else if (state.conflictPrompt.open) answerConflict(null);
           else if (state.folderRenameDialog.open) state.folderRenameDialog.open = false;
           else if (state.fileRenameDialog.open) state.fileRenameDialog.open = false;
           else if (state.folderDeleteDialog.open) state.folderDeleteDialog.open = false;
@@ -2022,7 +2136,7 @@
         gridAreaEl, onGridScroll, tileGridPosition, rowHasBox, gridRowHeight, gridRowTemplate, gridTotalRows,
         onTileClick, onGridAreaClick, selectSingle, selectAll, treeAutoExpandDepth, saveSession,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
-        rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup, removeSelectionFromGroup, groupSelectionAction,
+        onTileDragStart, transferFilesTo, answerConflict, rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup, removeSelectionFromGroup, groupSelectionAction,
         duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, commitMassRename, revealInFinder,
         openPrivacySettings, openContainingFolder,
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
@@ -2102,7 +2216,7 @@
             <div class="tree-rows" v-if="folderTree">
               <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir"
                          :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" :auto-expand-depth="treeAutoExpandDepth"
-                         :persist-expansion="saveSession" @select="selectFolder" @contextmenu="openFolderContextMenu"></tree-node>
+                         :persist-expansion="saveSession" @select="selectFolder" @contextmenu="openFolderContextMenu" @drop-files="(paths, dest) => transferFilesTo('move', paths, dest)"></tree-node>
             </div>
             <div class="tree-rows" v-else><div class="tree-row dim" style="cursor:default">no folder watched</div></div>
             <div class="tree-label">Tags</div>
@@ -2229,11 +2343,11 @@
               <div class="tile-grid" :style="{ '--row-h': gridRowHeight + 'px', gridTemplateRows: gridRowTemplate }">
                 <template v-for="(entry, i) in renderedEntries" :key="entry.type === 'group' ? entry.group.id : entry.file.path">
 
-                  <div v-if="entry.type === 'file'" class="tile" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
+                  <div v-if="entry.type === 'file'" class="tile" draggable="true" @dragstart="onTileDragStart($event, entry.file.path)" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.file.path), new: isNew(entry.file) }"
                        @click="onTileClick($event, entry.file.path)" @dblclick="openViewer(entry.file.path)"
                        @contextmenu="openFileContextMenu($event, entry.file.path)">
                     <div class="tile-thumb">
-                      <img loading="lazy" :src="gridThumbSrc(entry.file.path)" :style="{ transform: 'rotate(' + (state.rotations[entry.file.path] || 0) + 'deg)' }" />
+                      <img draggable="false" loading="lazy" :src="gridThumbSrc(entry.file.path)" :style="{ transform: 'rotate(' + (state.rotations[entry.file.path] || 0) + 'deg)' }" />
                     </div>
                     <div v-if="state.inlineRenamePath === entry.file.path" class="tile-rename" @click.stop>
                       <input v-model="state.inlineRenameValue" @keydown.enter.stop="commitInlineRename" @keydown.esc.stop="cancelInlineRename" @blur="commitInlineRename" autofocus />
@@ -2263,7 +2377,7 @@
                   </div>
                   </div>
 
-                  <div v-else class="tile" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
+                  <div v-else class="tile" draggable="true" @dragstart="onTileDragStart($event, entry.group.keyPath)" :style="tileGridPosition(i)" :class="{ 'box-pad': rowHasBox(i), selected: state.selection.includes(entry.group.keyPath) }" @click="onTileClick($event, entry.group.keyPath)" @contextmenu="openFileContextMenu($event, entry.group.keyPath)">
                     <div class="tile-stack">
                       <div class="stack-card">
                         <div class="layer layer1"></div>
@@ -2364,7 +2478,7 @@
             <div class="tree-rows" v-if="folderTree">
               <tree-node :node="folderTree" :active-path="state.folderFilter || activeTab.rootDir"
                          :subfolders="state.subfoldersCache" :expanded="state.expandedFolders" :load-subfolders="loadSubfolders" :auto-expand-depth="treeAutoExpandDepth"
-                         :persist-expansion="saveSession" @select="selectFolder" @contextmenu="openFolderContextMenu"></tree-node>
+                         :persist-expansion="saveSession" @select="selectFolder" @contextmenu="openFolderContextMenu" @drop-files="(paths, dest) => transferFilesTo('move', paths, dest)"></tree-node>
             </div>
             <div class="tree-receipt"><div>{{ state.receipt.line1 }}</div><div class="delta">{{ state.receipt.line2 }}</div></div>
           </div>
@@ -2628,6 +2742,10 @@
                       :message="'Move “' + basename(state.folderDeleteDialog.path) + '” and everything inside it to the Trash?'"
                       confirm-label="Move to Trash"
                       @close="state.folderDeleteDialog.open = false" @confirm="commitFolderDelete"></confirm-dialog>
+
+      <conflict-dialog v-if="state.conflictPrompt.open" :name="state.conflictPrompt.name" :dest-name="state.conflictPrompt.destName"
+                       :remaining="state.conflictPrompt.remaining" :mode="state.conflictPrompt.mode"
+                       @choose="answerConflict" @cancel="answerConflict(null)"></conflict-dialog>
 
       <toast :message="state.toastMessage"></toast>
     </div>`,
