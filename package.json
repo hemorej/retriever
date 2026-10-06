@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Image and catalog browsing desktop app",
+  "author": "Jerome Arfouche",
   "main": "src/main/index.js",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
