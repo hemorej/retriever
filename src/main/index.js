@@ -307,6 +307,10 @@ app.whenReady().then(() => {
   ipcMain.handle('move-files', (_event, { filePaths, destDir, resolutions }) => transferFiles('move', filePaths, destDir, resolutions));
   ipcMain.handle('copy-files', (_event, { filePaths, destDir, resolutions }) => transferFiles('copy', filePaths, destDir, resolutions));
 
+  // Rewrites JPEG/PNG files in place with the selected metadata categories
+  // removed (see metadata.js). Other formats come back `skipped: true`. With
+  // `options.keepCopy`, the original is first copied to an `_originals/`
+  // folder beside the file (never overwriting an existing backup).
   ipcMain.handle('strip-metadata', async (_event, { filePaths, options }) => {
     const results = [];
     for (const filePath of filePaths) {
@@ -347,14 +351,11 @@ app.whenReady().then(() => {
     if (err) throw new Error(err);
   });
 
-  // Lists a directory's immediate subdirectories, independent of the
-  // image-only fs watcher — used to drive the folder tree's expand
-  // affordance and the grid's subfolder tiles, which need to reflect real
-  // filesystem structure even where there are no (tracked) images.
   // Backs the "folder has no photos" empty state's note about files
   // Retriever doesn't read (raw/video/document siblings) — a plain
   // extension count over the folder's direct, non-image files, independent
-  // of the image-only fs watcher above.
+  // of the image-only fs watcher. The exclude set mirrors the watcher's
+  // IMAGE_EXTENSIONS (watcher.js).
   const NON_IMAGE_NOTE_EXCLUDE = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff']);
   ipcMain.handle('list-other-files', async (_event, dir) => {
     try {
@@ -372,6 +373,10 @@ app.whenReady().then(() => {
     }
   });
 
+  // Lists a directory's immediate (non-hidden) subdirectories, independent of
+  // the image-only fs watcher — used to drive the folder tree's expand
+  // affordance and the grid's subfolder tiles, which need to reflect real
+  // filesystem structure even where there are no (tracked) images.
   ipcMain.handle('list-subfolders', async (_event, dir) => {
     try {
       const entries = await fs.promises.readdir(dir, { withFileTypes: true });

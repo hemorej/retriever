@@ -5,6 +5,8 @@ const { hashFile, statAsync } = require('./hash');
 const DOTFILE = /(^|[/\\])\../;
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff']);
 
+// Case-insensitive extension check against IMAGE_EXTENSIONS. Keep in sync with
+// NON_IMAGE_NOTE_EXCLUDE in main/index.js, which must list the same set.
 function isImage(filePath) {
   const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
   return IMAGE_EXTENSIONS.has(ext);
@@ -14,11 +16,20 @@ function isImage(filePath) {
  * Watches rootDir for image files and reconciles the on-disk state against
  * the hash-identity DB.
  *
+ * Emits normalized events through `onEvent`:
+ *   { type: 'added',   filePath, size, mtimeMs, tracked: false }
+ *   { type: 'changed', filePath, size, mtimeMs }
+ *   { type: 'removed', filePath, tracked: false }   — untracked file deleted
+ *   { type: 'lost',    filePath, fileId }           — tracked file deleted
+ *   { type: 'moved',   filePath, from, fileId }     — new file matched a lost row
+ *   { type: 'ready' }                               — initial scan finished
+ *   { type: 'error',   message, code }
+ *
  * Identity model:
  * - Untagged files are never hashed or written to the DB — they're just
  *   reported to the UI as plain filesystem entries.
- * - A file only gets a DB row once the user tags/groups it (see attachTag
- *   below), at which point it gets hashed and inserted.
+ * - A file only gets a DB row once the user tags/groups it (see
+ *   ensureTracked below), at which point it gets hashed and inserted.
  * - When a *tracked* file disappears (external move/rename/delete), its row
  *   is kept with path = NULL ("lost") rather than deleted, so tags survive.
  * - When any file appears, if its size matches a currently-lost row, we hash
@@ -30,9 +41,10 @@ function createWatcher({ rootDir, database, onEvent }) {
     ignoreInitial: false,
     depth: undefined,
     // Dotfiles/.DS_Store churn constantly and are never images; skip them to
-    // cut needless CPU/event overhead. Once a thumbnail cache directory
-    // exists it must be excluded here too, or the app ends up watching its
-    // own cache writes.
+    // cut needless CPU/event overhead. (The thumbnail cache lives in
+    // userData, outside any normally-watched root, so it needs no exclusion
+    // here — but watching a root that contains userData would pick up its
+    // own cache writes.)
     // Non-image files (raw/video/documents) are skipped here so they never
     // become events at all; `stats` is undefined on chokidar's first probe of
     // a path, in which case it's left alone (it may be a directory).

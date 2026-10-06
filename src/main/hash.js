@@ -1,7 +1,8 @@
 const fs = require('fs');
 const { createXXHash64 } = require('hash-wasm');
 
-// Identity hashing, not security — xxhash64 streamed over the whole file.
+// Identity hashing, not security — xxhash64 (hex string) streamed over the
+// whole file.
 // Fine for photo-sized files; if the library ever includes huge originals,
 // swap in a cheap first/last-N-KB signature as a pre-filter before this.
 async function hashFile(filePath) {
@@ -18,11 +19,14 @@ async function hashFile(filePath) {
   return hasher.digest('hex');
 }
 
+// { size, mtimeMs } with mtime rounded to whole ms, the form stored in
+// files.mtime_ms. Currently unused by the app (watcher.js uses statAsync).
 function statSync(filePath) {
   const st = fs.statSync(filePath);
   return { size: st.size, mtimeMs: Math.round(st.mtimeMs) };
 }
 
+// Async counterpart of statSync; rejects if the file is gone.
 async function statAsync(filePath) {
   const st = await fs.promises.stat(filePath);
   return { size: st.size, mtimeMs: Math.round(st.mtimeMs) };

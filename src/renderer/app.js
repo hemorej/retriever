@@ -565,7 +565,7 @@
             </div>
           </div>
           <div class="shortcuts-footer">
-            <span>⌘Z undo — covers renames, moves, rotations and strips</span>
+            <span>⌘Z undo — covers tag changes and rotations</span>
             <span class="push">⌘, preferences</span>
           </div>
         </div>

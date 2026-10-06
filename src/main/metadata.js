@@ -71,6 +71,9 @@ const STRIPPERS = {
   '.png': stripPng,
 };
 
+// Returns a new Buffer with the metadata categories selected in `opts`
+// ({ exif, gps, iptc, icc, ... }) removed, or null when the extension isn't
+// a supported format (the caller reports that file as skipped).
 function stripBuffer(buf, ext, opts) {
   const strip = STRIPPERS[ext.toLowerCase()];
   return strip ? strip(buf, opts) : null; // null = format not supported in this pass

@@ -42,6 +42,9 @@ CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash);
 CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);
 `;
 
+// Opens (creating if needed) retriever.sqlite3 in userDataDir with WAL and
+// foreign keys on, and applies SCHEMA. Returns the better-sqlite3 handle that
+// every query below takes as its first argument.
 function openDb(userDataDir) {
   const dbPath = path.join(userDataDir, 'retriever.sqlite3');
   const db = new Database(dbPath);
@@ -53,10 +56,12 @@ function openDb(userDataDir) {
 
 // --- queries -----------------------------------------------------------
 
+// Row for a currently-present file at filePath, or undefined if untracked.
 function getByPath(db, filePath) {
   return db.prepare('SELECT * FROM files WHERE path = ?').get(filePath);
 }
 
+// Row for a content hash, whether its file is present or lost.
 function getByHash(db, hash) {
   return db.prepare('SELECT * FROM files WHERE hash = ?').get(hash);
 }
@@ -73,10 +78,13 @@ function getLostBySize(db, size) {
   return stmt.all(size);
 }
 
+// Every tracked file whose path is currently NULL (missing from disk).
 function getLost(db) {
   return db.prepare('SELECT * FROM files WHERE path IS NULL').all();
 }
 
+// Starts tracking a file (called only via ensureTracked in watcher.js).
+// Returns the new row.
 function insertFile(db, { hash, filePath, size, mtimeMs }) {
   const now = Date.now();
   const info = db
@@ -88,6 +96,8 @@ function insertFile(db, { hash, filePath, size, mtimeMs }) {
   return getByHash(db, hash);
 }
 
+// Marks the row at filePath as lost: path -> NULL, lost_at -> now. The row
+// (and its tags/group membership) is kept so a later move can re-attach it.
 function markLost(db, filePath) {
   db.prepare('UPDATE files SET path = NULL, lost_at = ? WHERE path = ?').run(
     Date.now(),
@@ -95,16 +105,19 @@ function markLost(db, filePath) {
   );
 }
 
+// Points the row with this hash at newPath and clears its lost state.
 function reattachPath(db, hash, newPath, mtimeMs) {
   db.prepare(
     'UPDATE files SET path = ?, mtime_ms = ?, lost_at = NULL WHERE hash = ?'
   ).run(newPath, mtimeMs, hash);
 }
 
+// Hard-deletes a row; tags and group memberships cascade.
 function deleteFile(db, fileId) {
   db.prepare('DELETE FROM files WHERE id = ?').run(fileId);
 }
 
+// Creates the tag name if new and attaches it to the file (idempotent).
 function addTag(db, fileId, tagName) {
   db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)').run(tagName);
   const tag = db.prepare('SELECT id FROM tags WHERE name = ?').get(tagName);
@@ -119,6 +132,7 @@ function removeTag(db, fileId, tagName) {
   ).run(fileId, tagName);
 }
 
+// Detaches every tag from the file (the tag names themselves are kept).
 function clearTags(db, fileId) {
   db.prepare('DELETE FROM file_tags WHERE file_id = ?').run(fileId);
 }
@@ -152,6 +166,8 @@ function getAllFileTags(db) {
   return map;
 }
 
+// Creates a group with fileIds as members in the given order (position =
+// index). Returns the new group id.
 function createGroup(db, name, fileIds) {
   const tx = db.transaction(() => {
     const id = db.prepare('INSERT INTO groups (name) VALUES (?)').run(name).lastInsertRowid;
@@ -166,6 +182,8 @@ function deleteGroup(db, groupId) {
   db.prepare('DELETE FROM groups WHERE id = ?').run(groupId);
 }
 
+// Appends files after the group's current last position; files already in
+// the group are ignored.
 function addGroupMembers(db, groupId, fileIds) {
   let pos = db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS n FROM group_members WHERE group_id = ?').get(groupId).n;
   const ins = db.prepare('INSERT OR IGNORE INTO group_members (group_id, file_id, position) VALUES (?, ?, ?)');

@@ -41,14 +41,14 @@ function initThumbnailCache(userDataDir) {
 }
 
 // --- worker pool ---------------------------------------------------------
-// Generation runs in worker_threads, not on this (main) process: the
-// execFileSync-blocks-main-process constraint documented in index.js's
-// runSips() is specific to spawning from Electron's main-process run loop —
-// plain Node worker threads don't hit that bug and, being dedicated threads,
-// blocking them doesn't block the UI either way.
+// Generation runs in worker_threads, not on this (main) process: spawning
+// `sips` from Electron's main-process run loop fails with "spawn EBADF", and
+// a synchronous spawn there would block all IPC. Plain Node worker threads
+// don't hit that bug and, being dedicated threads, blocking them doesn't
+// block the UI either way (see thumbnail-worker.js).
 
 const pool = []; // { worker, busy, currentJobId }
-const jobQueue = []; // { id, src, dest, maxDimension }
+const jobQueue = []; // { id, src, dest, maxDimension, quality?, format? } — FIFO; previews jump to the front
 const jobCallbacks = new Map(); // id -> { resolve, reject }
 const pending = new Map(); // cacheKey -> in-flight/queued Promise<string|null>
 let jobIdCounter = 0;
