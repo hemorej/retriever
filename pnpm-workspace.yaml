@@ -16,3 +16,7 @@ minimumReleaseAge: 4320
 # patches you've manually verified): add the package name here.
 # minimumReleaseAgeExclude:
 #   - some-package
+
+# Security override for transitive dep flagged by Dependabot.
+overrides:
+  source-map-js: '^1.2.2'
