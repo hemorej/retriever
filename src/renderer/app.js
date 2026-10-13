@@ -1057,6 +1057,10 @@
       }
 
       let gridResizeObserver = null;
+      // Set when leaving the viewer/sheet for the grid (not when a folder or
+      // tab switch resets the view) so the remounted .grid-area returns to
+      // the offset the user left it at; gridScrollTop still holds it.
+      let restoreGridScroll = false;
 
       const navOrder = computed(() => {
         const order = [];
@@ -1496,7 +1500,7 @@
 
       // ---------- viewer ----------
       function openViewer(p) { selectSingle(p); state.viewMode = 'viewer'; state.comparePaths.length = 0; }
-      function backToGrid() { state.viewMode = 'grid'; state.comparePaths.length = 0; }
+      function backToGrid() { restoreGridScroll = true; state.viewMode = 'grid'; state.comparePaths.length = 0; }
       function stepViewer(delta) {
         const order = navOrder.value;
         const i = order.indexOf(activePath.value);
@@ -1581,7 +1585,7 @@
         const sheet = activeTab.value.sheet;
         if (!sheet.selected.length) sheet.selected = sheetSourceFiles.value.map((f) => f.path);
       }
-      function switchToBrowse() { state.viewMode = 'grid'; }
+      function switchToBrowse() { restoreGridScroll = true; state.viewMode = 'grid'; }
       function toggleSheetView() { state.viewMode === 'sheet' ? switchToBrowse() : switchToSheet(); }
       function toggleSheetSelect(e, p) {
         const sheet = activeTab.value.sheet;
@@ -2053,7 +2057,21 @@
           // element always starts at scrollTop 0 — resync gridScrollTop here,
           // or the virtualized slice stays computed for the old offset and
           // renders nothing at the (now reset) visible scroll position.
-          if (el) { gridScrollTop.value = el.scrollTop; gridViewportHeight.value = el.clientHeight; gridResizeObserver.observe(el); }
+          if (el) {
+            const restore = restoreGridScroll;
+            restoreGridScroll = false;
+            const saved = gridScrollTop.value;
+            gridScrollTop.value = el.scrollTop; gridViewportHeight.value = el.clientHeight; gridResizeObserver.observe(el);
+            if (restore) {
+              nextTick(() => {
+                if (gridAreaEl.value !== el) return;
+                el.scrollTop = saved;
+                gridScrollTop.value = el.scrollTop;
+                // The viewer may have stepped to a file outside the old view.
+                if (activePath.value) ensureRowVisible(activePath.value);
+              });
+            }
+          }
         }, { immediate: true });
         watch(() => [state.thumbSize, renderedEntries.value.length], () => nextTick(measureTileRowExtra), { immediate: true });
         // Keep the viewer's filmstrip centred on the active picture. Also
