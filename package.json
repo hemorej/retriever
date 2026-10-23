@@ -16,7 +16,7 @@
     "chokidar": "^5.0.0",
     "hash-wasm": "^4.11.0",
     "pdfkit": "^0.20.2",
-    "vue": "^3.5.43"
+    "vue": "^3.5.44"
   },
   "devDependencies": {
     "electron": "^44.7.0",
