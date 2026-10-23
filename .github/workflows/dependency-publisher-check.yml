@@ -1,0 +1,39 @@
+name: Dependency publisher check
+
+# Runs on every PR (so it can be a required check; the script exits early
+# when the lockfile is unchanged) and flags
+# newly-introduced package versions published by an npm account that
+# hasn't published recent prior versions of that package — a strong
+# signal of a hijacked-maintainer supply-chain compromise (this check
+# was added after Dependabot proposed a fake typescript@7.0.2 release
+# on another project).
+on:
+  pull_request:
+
+jobs:
+  check-new-publishers:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.9.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.x"
+
+      - name: Check for unfamiliar npm publishers
+        env:
+          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+        run: node scripts/check-new-publishers.mjs
+
+      - name: Flag changes to allowBuilds (install-script allowlist)
+        env:
+          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+        run: node scripts/check-allow-builds.mjs

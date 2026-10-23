@@ -1,0 +1,38 @@
+name: Dependency audit
+
+# Not part of the deploy gate: runs on every PR (so it can be a required check) and weekly, so a
+# newly disclosed advisory against something already in the lockfile surfaces
+# (GitHub emails on a failed scheduled run) without blocking unrelated deploys.
+on:
+  pull_request:
+  schedule:
+    - cron: "0 7 * * 1" # Monday 07:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.9.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.x"
+          cache: pnpm
+
+      # --ignore-scripts: the audit only needs node_modules for signature
+      # verification, not the electron-rebuild postinstall.
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Audit for known vulnerabilities
+        run: pnpm audit --audit-level=high
+
+      - name: Verify npm registry signatures
+        run: pnpm audit signatures
