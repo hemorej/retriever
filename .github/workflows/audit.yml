@@ -1,13 +1,10 @@
 name: Dependency audit
 
-# Not part of the deploy gate: runs on dependency-touching PRs and weekly, so a
+# Not part of the deploy gate: runs on every PR (so it can be a required check) and weekly, so a
 # newly disclosed advisory against something already in the lockfile surfaces
 # (GitHub emails on a failed scheduled run) without blocking unrelated deploys.
 on:
   pull_request:
-    paths:
-      - "pnpm-lock.yaml"
-      - "package.json"
   schedule:
     - cron: "0 7 * * 1" # Monday 07:00 UTC
   workflow_dispatch: {}

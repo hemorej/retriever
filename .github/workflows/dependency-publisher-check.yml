@@ -1,6 +1,7 @@
 name: Dependency publisher check
 
-# Runs on any PR that touches the lockfile or package.json and flags
+# Runs on every PR (so it can be a required check; the script exits early
+# when the lockfile is unchanged) and flags
 # newly-introduced package versions published by an npm account that
 # hasn't published recent prior versions of that package — a strong
 # signal of a hijacked-maintainer supply-chain compromise (this check
@@ -8,10 +9,6 @@ name: Dependency publisher check
 # on another project).
 on:
   pull_request:
-    paths:
-      - "pnpm-lock.yaml"
-      - "package.json"
-      - "pnpm-workspace.yaml"
 
 jobs:
   check-new-publishers:
