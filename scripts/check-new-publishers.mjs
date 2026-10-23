@@ -57,7 +57,7 @@ function getBaseLockfile() {
 }
 
 async function getPublisherInfo(name, version) {
-  const url = `https://registry.npmjs.org/${encodeURIComponent(name).replace("%40", "@").replace("%2F", "/")}`;
+  const url = `https://registry.npmjs.org/${encodeURIComponent(name).replaceAll("%40", "@").replaceAll("%2F", "/")}`;
   const res = await fetch(url);
   if (!res.ok) return null;
   const packument = await res.json();
