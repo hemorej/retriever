@@ -528,7 +528,7 @@
         cols: [
           { label: 'Navigate', rows: [
             ['↑ ↓ ← →', 'move selection'], ['↵ / space', 'open fit-width'], ['esc', 'back to grid'],
-            ['⌘T', 'new tab'], ['⌘1–9', 'go to tab'], ['⌘⌥←', 'parent folder'],
+            ['⌘T', 'new tab'], ['⌘1–9', 'go to tab'], ['⌃⇥ / ⌃⇧⇥', 'next / previous tab'], ['⌘⌥←', 'parent folder'],
             ['⌘F', 'search filenames'], ['⌘⌥R', 'rescan folder'], ['⌘L', 'filter panel'], ['P', 'compare selected images (2–6)'], ['⌘⇧C', 'contact sheet / browse'],
             ['O', 'open in editor'],
           ]},
@@ -542,7 +542,7 @@
             ['⌘⌥1', 'sort by name'], ['⌘⌥2', 'sort by date modified'],
           ]},
           { label: 'Files', rows: [
-            ['[ ]', 'rotate ccw / cw'], ['⌘R', 'rename…'], ['⌘⇧R', 'mass rename…'], ['⌘D', 'duplicate'],
+            ['[ ]', 'rotate ccw / cw'], ['⌘S', 'save rotation to file'], ['⌘R', 'rename…'], ['⌘⇧R', 'mass rename…'], ['⌘D', 'duplicate'],
             ['⌘⌥M', 'move to…'], ['⌘⌥C', 'copy to…'], ['⌘⌫', 'strip metadata'], ['⌘⇧O', 'reveal in Finder'],
           ]},
         ],
@@ -2013,6 +2013,15 @@
           if (e.key === 'Escape') { cancelInlineRename(); }
           return;
         }
+        if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'Tab') {
+          e.preventDefault();
+          const n = state.tabs.length;
+          if (n > 1) {
+            const i = state.tabs.findIndex((t) => t.id === state.activeTabId);
+            selectTab(state.tabs[(i + (e.shiftKey ? -1 : 1) + n) % n].id);
+          }
+          return;
+        }
         if (isTypingTarget(document.activeElement) && e.key !== 'Escape' && !(e.metaKey && e.key.toLowerCase() === 'f')) return;
 
         if (e.key === 'Escape') {
@@ -2077,6 +2086,7 @@
         if (e.metaKey && e.altKey && e.key.toLowerCase() === 'c') { e.preventDefault(); moveOrCopySelection('copy'); return; }
         if (e.metaKey && e.key === 'Backspace') { e.preventDefault(); if (state.selection.length) state.cleanupDialogOpen = true; return; }
         if (e.metaKey && e.key.toLowerCase() === 'o' && e.shiftKey) { e.preventDefault(); if (activePath.value) revealInFinder(activePath.value); return; }
+        if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveRotationsToDisk(); return; }
         if (e.metaKey && e.key === 'z') { e.preventDefault(); undo(); return; }
         if (e.metaKey && e.key === ',') { e.preventDefault(); toast('Preferences aren’t implemented in this pass.'); return; }
         if (e.metaKey && e.altKey && ['1', '2'].includes(e.key)) {
