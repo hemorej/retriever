@@ -2277,12 +2277,12 @@
           </div>
           <div class="vdivider"></div>
           <div class="chip-row">
-            <div class="chip"><span @click="rotateSelection(-90)">↺</span><span>Rotate</span><span @click="rotateSelection(90)">↻</span></div>
-            <div class="chip" title="Write pending rotation into the file(s)" @click="saveRotationsToDisk">Save rotation</div>
+            <div class="chip" :class="{ disabled: !state.selection.length }"><span @click="rotateSelection(-90)">↺</span><span>Rotate</span><span @click="rotateSelection(90)">↻</span></div>
+            <div class="chip" :class="{ disabled: !state.selection.length }" title="Write pending rotation into the file(s)" @click="saveRotationsToDisk">Save rotation</div>
             <div class="chip" title="Rescan folder (⌘⌥R)" @click="refreshFolder">↻ Rescan</div>
-            <div class="chip" :class="{ accent: state.selection.length >= 2 }" @click="groupSelection">Group {{ state.selection.length }}</div>
+            <div class="chip" :class="{ disabled: state.selection.length < 2, accent: state.selection.length >= 2 }" @click="groupSelection">Group {{ state.selection.length }}</div>
             <div class="chip" :class="{ disabled: comparableSelectionCount < 2, accent: comparableSelectionCount >= 2 }" @click="openCompareView">Compare <span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">P</span></div>
-            <div class="chip" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 190; state.tagMenu.y = 74">Tag ▾</div>
+            <div class="chip" :class="{ disabled: !state.selection.length }" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 190; state.tagMenu.y = 74">Tag ▾</div>
             <div class="chip" :class="{ disabled: state.selection.length !== 1 }" @click="startInlineRename(activePath)">Rename…</div>
             <div class="chip" :class="{ disabled: !state.selection.length }" @click="state.cleanupDialogOpen = true">Clean metadata</div>
           </div>
