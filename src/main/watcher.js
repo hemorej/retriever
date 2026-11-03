@@ -1,3 +1,4 @@
+const fs = require('fs');
 const chokidar = require('chokidar');
 const db = require('./db');
 const { hashFile, statAsync } = require('./hash');
@@ -36,7 +37,31 @@ function isImage(filePath) {
  *   it and compare; a match re-points that row's path (a "recovered" move).
  *   No match means it's an unrelated new file — left untracked until tagged.
  */
-function createWatcher({ rootDir, database, onEvent }) {
+// Max concurrent full-file hashes. When a lost row exists, every same-size
+// file the scan sees is hashed; unbounded, that is hundreds of simultaneous
+// read streams (EMFILE) racing 'ready'.
+const MAX_CONCURRENT_HASHES = 4;
+
+function createLimiter(max) {
+  let active = 0;
+  const queue = [];
+  const next = () => {
+    if (active >= max || !queue.length) return;
+    active += 1;
+    const { fn, resolve, reject } = queue.shift();
+    fn().then(resolve, reject).finally(() => { active -= 1; next(); });
+  };
+  return (fn) => new Promise((resolve, reject) => { queue.push({ fn, resolve, reject }); next(); });
+}
+
+function createWatcher({ rootDir, database, onEvent: emit }) {
+  // Once closed (tab switch / rescan), in-flight async handlers must not leak
+  // events from the old root into the new one.
+  let closed = false;
+  const onEvent = (evt) => { if (!closed) emit(evt); };
+  const limitHash = createLimiter(MAX_CONCURRENT_HASHES);
+  const pending = new Set(); // in-flight handleAdd promises; 'ready' waits on them
+
   const watcher = chokidar.watch(rootDir, {
     ignoreInitial: false,
     depth: undefined,
@@ -68,11 +93,46 @@ function createWatcher({ rootDir, database, onEvent }) {
   // real `from` in its 'moved' event instead of null.
   const lastKnownPath = new Map();
 
-  watcher.on('add', (filePath, stats) => handleAdd(filePath, stats));
+  // A rename of a tracked file can reach us as add(new) BEFORE unlink(old).
+  // At add time nothing is lost yet, so the new path is reported as a plain
+  // untracked file; remember such adds briefly so handleUnlink can pair them.
+  const RECENT_ADD_MS = 30000;
+  const recentAdds = new Map(); // filePath -> { size, mtimeMs, at }
+
+  const origClose = watcher.close.bind(watcher);
+  watcher.close = () => { closed = true; return origClose(); };
+
+  watcher.on('add', (filePath, stats) => {
+    const p = handleAdd(filePath, stats)
+      .catch((err) => console.error('[watcher] handleAdd failed for', filePath, err))
+      .finally(() => pending.delete(p));
+    pending.add(p);
+  });
   watcher.on('change', (filePath, stats) => handleChange(filePath, stats));
   watcher.on('unlink', (filePath) => handleUnlink(filePath));
   watcher.on('error', (err) => onEvent({ type: 'error', message: err.message, code: err.code }));
-  watcher.on('ready', () => onEvent({ type: 'ready' }));
+  watcher.on('ready', async () => {
+    // Hash-matching adds finish after chokidar's scan does; hold 'ready' until
+    // they've reported so the renderer doesn't prune seeded tiles whose
+    // 'added' is merely late.
+    while (pending.size && !closed) await Promise.allSettled([...pending]);
+    if (closed) return;
+    try { reconcileMissing(); } catch (err) { console.error('[watcher] reconcile failed', err); }
+    onEvent({ type: 'ready' });
+  });
+
+  // Tracked rows under rootDir whose file is gone but whose unlink we never
+  // saw (missed/coalesced fs event): mark them lost so they stop shadowing.
+  function reconcileMissing() {
+    const prefix = rootDir.endsWith('/') ? rootDir : rootDir + '/';
+    for (const row of db.getTrackedUnder(database, prefix)) {
+      if (!fs.existsSync(row.path)) {
+        lastKnownPath.set(row.id, row.path);
+        db.markLost(database, row.path);
+        onEvent({ type: 'lost', filePath: row.path, fileId: row.id });
+      }
+    }
+  }
 
   async function handleAdd(filePath, stats) {
     if (!isImage(filePath)) return;
@@ -85,18 +145,44 @@ function createWatcher({ rootDir, database, onEvent }) {
     }
     const candidates = db.getLostBySize(database, size);
 
+    // A hash failure (file mid-write, EMFILE, vanished) must never swallow the
+    // file: fall through and report it as a plain added file.
+    let hash = null;
+    if (candidates.length) {
+      try { hash = await limitHash(() => hashFile(filePath)); } catch { hash = null; }
+    }
+    if (closed) return;
     for (const candidate of candidates) {
-      const hash = await hashFile(filePath);
-      if (hash === candidate.hash) {
+      if (hash !== null && hash === candidate.hash) {
         const from = lastKnownPath.get(candidate.id) ?? candidate.path;
         lastKnownPath.delete(candidate.id);
         db.reattachPath(database, hash, filePath, mtimeMs);
-        onEvent({ type: 'moved', filePath, from, fileId: candidate.id });
+        onEvent({ type: 'moved', filePath, from, fileId: candidate.id, tags: db.getTagsForFile(database, candidate.id) });
         return;
       }
     }
 
+    const now = Date.now();
+    for (const [p, r] of recentAdds) if (now - r.at > RECENT_ADD_MS) recentAdds.delete(p);
+    recentAdds.set(filePath, { size, mtimeMs, at: now });
     onEvent({ type: 'added', filePath, size, mtimeMs, tracked: false });
+  }
+
+  // Unlink-after-add half of a rename: find a just-reported untracked file with
+  // the same content and re-attach the lost row (and its tags) to it.
+  async function rematchRecentAdd(row, oldPath) {
+    for (const [newPath, r] of recentAdds) {
+      if (r.size !== row.size || newPath === oldPath) continue;
+      let hash;
+      try { hash = await limitHash(() => hashFile(newPath)); } catch { continue; }
+      if (closed) return;
+      if (hash !== row.hash || db.getByPath(database, newPath)) continue;
+      recentAdds.delete(newPath);
+      lastKnownPath.delete(row.id);
+      db.reattachPath(database, row.hash, newPath, r.mtimeMs);
+      onEvent({ type: 'moved', filePath: newPath, from: oldPath, fileId: row.id, tags: db.getTagsForFile(database, row.id) });
+      return;
+    }
   }
 
   async function handleChange(filePath, stats) {
@@ -112,11 +198,13 @@ function createWatcher({ rootDir, database, onEvent }) {
   function handleUnlink(filePath) {
     if (!isImage(filePath)) return;
 
+    recentAdds.delete(filePath);
     const row = db.getByPath(database, filePath);
     if (row) {
       lastKnownPath.set(row.id, filePath);
       db.markLost(database, filePath);
       onEvent({ type: 'lost', filePath, fileId: row.id });
+      rematchRecentAdd(row, filePath).catch((err) => console.error('[watcher] rematch failed', err));
     } else {
       onEvent({ type: 'removed', filePath, tracked: false });
     }

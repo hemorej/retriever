@@ -74,7 +74,7 @@
 
   --tag-select: #4a9d5f;
   --tag-reject: #c9503f;
-  --tag-maybe: #d9a13d;
+  --tag-maybe: #5b8fd9;
   --tag-published: #e6b422;
 
   --font-ui: Geist, system-ui, sans-serif;
@@ -285,7 +285,7 @@ body {
 .tag-pill { padding: 2px 8px; border-radius: 11px; font-size: 10.5px; cursor: pointer; }
 .tag-pill.t-select { background: rgba(74, 157, 95, .18); color: #8fd0a2; border: 1px solid rgba(74, 157, 95, .35); }
 .tag-pill.t-reject { background: rgba(201, 80, 63, .18); color: var(--status-danger-text); border: 1px solid rgba(201, 80, 63, .35); }
-.tag-pill.t-maybe { background: rgba(217, 161, 61, .18); color: #ecc784; border: 1px solid rgba(217, 161, 61, .35); }
+.tag-pill.t-maybe { background: rgba(91, 143, 217, .18); color: #a9c6ef; border: 1px solid rgba(91, 143, 217, .38); }
 .tag-pill.t-published { background: var(--accent-tint); color: var(--accent-text); border: 1px solid var(--accent-edge); }
 .tag-pill.add-tag { background: var(--bg-control); color: var(--text-muted-2); border: 1px dashed var(--border-control-strong); }
 .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px 22px; font-size: 11px; font-family: var(--font-mono); }

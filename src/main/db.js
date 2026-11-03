@@ -78,6 +78,13 @@ function getLostBySize(db, size) {
   return stmt.all(size);
 }
 
+// Present tracked rows whose path starts with prefix (a root dir + '/').
+function getTrackedUnder(db, prefix) {
+  return db
+    .prepare("SELECT id, path FROM files WHERE path IS NOT NULL AND substr(path, 1, ?) = ?")
+    .all(prefix.length, prefix);
+}
+
 // Every tracked file whose path is currently NULL (missing from disk).
 function getLost(db) {
   return db.prepare('SELECT * FROM files WHERE path IS NULL').all();
@@ -124,6 +131,14 @@ function addTag(db, fileId, tagName) {
   db.prepare(
     'INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?, ?)'
   ).run(fileId, tag.id);
+}
+
+// Replaces all of the file's tags with tagName (one tag per file).
+function setTag(db, fileId, tagName) {
+  db.transaction(() => {
+    db.prepare('DELETE FROM file_tags WHERE file_id = ?').run(fileId);
+    addTag(db, fileId, tagName);
+  })();
 }
 
 function removeTag(db, fileId, tagName) {
@@ -228,11 +243,13 @@ module.exports = {
   getByHash,
   getLost,
   getLostBySize,
+  getTrackedUnder,
   insertFile,
   markLost,
   reattachPath,
   deleteFile,
   addTag,
+  setTag,
   removeTag,
   clearTags,
   getTagsForFile,
