@@ -11,6 +11,8 @@ const { execFile } = require('child_process');
 const db = require('./db');
 const { createWatcher, ensureTracked } = require('./watcher');
 const { stripBuffer } = require('./metadata');
+const { rotateFiles } = require('./rotate');
+const { hashFile, statAsync } = require('./hash');
 const thumbnails = require('./thumbnails');
 const PDFDocument = require('pdfkit');
 
@@ -329,6 +331,25 @@ app.whenReady().then(() => {
       }
       await fs.promises.writeFile(filePath, stripped);
       results.push({ filePath, skipped: false });
+    }
+    return results;
+  });
+
+  // Writes pending rotations to disk losslessly (see rotate-worker.js). Since
+  // identity is the content hash, a tracked file's row is re-hashed afterwards
+  // so its tags and group membership stay attached to the rotated bytes.
+  ipcMain.handle('rotate-files', async (_event, items) => {
+    const results = await rotateFiles(items);
+    for (const r of results) {
+      if (!r.ok) continue;
+      const row = db.getByPath(database, r.filePath);
+      if (!row) continue;
+      try {
+        const { size, mtimeMs } = await statAsync(r.filePath);
+        db.updateContent(database, row.id, await hashFile(r.filePath), size, mtimeMs);
+      } catch (err) {
+        console.error('[rotate] re-hash failed for', r.filePath, err);
+      }
     }
     return results;
   });

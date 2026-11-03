@@ -119,6 +119,16 @@ function reattachPath(db, hash, newPath, mtimeMs) {
   ).run(newPath, mtimeMs, hash);
 }
 
+// Records new content for a tracked file after it was rewritten in place
+// (e.g. rotated): the hash is the identity, so it must follow the bytes.
+// Returns false (row untouched) if another row already owns that hash.
+function updateContent(db, fileId, hash, size, mtimeMs) {
+  const clash = db.prepare('SELECT id FROM files WHERE hash = ? AND id != ?').get(hash, fileId);
+  if (clash) return false;
+  db.prepare('UPDATE files SET hash = ?, size = ?, mtime_ms = ? WHERE id = ?').run(hash, size, mtimeMs, fileId);
+  return true;
+}
+
 // Hard-deletes a row; tags and group memberships cascade.
 function deleteFile(db, fileId) {
   db.prepare('DELETE FROM files WHERE id = ?').run(fileId);
@@ -247,6 +257,7 @@ module.exports = {
   insertFile,
   markLost,
   reattachPath,
+  updateContent,
   deleteFile,
   addTag,
   setTag,
