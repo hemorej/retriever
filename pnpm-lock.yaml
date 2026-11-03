@@ -27,6 +27,9 @@ importers:
         specifier: ^3.5.44
         version: 3.5.44
     devDependencies:
+      '@electron/rebuild':
+        specifier: 4.2.1
+        version: 4.2.1
       electron:
         specifier: ^45.0.0
         version: 45.0.0

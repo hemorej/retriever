@@ -78,6 +78,13 @@ function getLostBySize(db, size) {
   return stmt.all(size);
 }
 
+// Present tracked rows whose path starts with prefix (a root dir + '/').
+function getTrackedUnder(db, prefix) {
+  return db
+    .prepare("SELECT id, path FROM files WHERE path IS NOT NULL AND substr(path, 1, ?) = ?")
+    .all(prefix.length, prefix);
+}
+
 // Every tracked file whose path is currently NULL (missing from disk).
 function getLost(db) {
   return db.prepare('SELECT * FROM files WHERE path IS NULL').all();
@@ -228,6 +235,7 @@ module.exports = {
   getByHash,
   getLost,
   getLostBySize,
+  getTrackedUnder,
   insertFile,
   markLost,
   reattachPath,

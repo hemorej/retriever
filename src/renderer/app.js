@@ -528,7 +528,7 @@
           { label: 'Navigate', rows: [
             ['↑ ↓ ← →', 'move selection'], ['↵ / space', 'open fit-width'], ['esc', 'back to grid'],
             ['⌘T', 'new tab'], ['⌘1–9', 'go to tab'], ['⌘⌥←', 'parent folder'],
-            ['⌘F', 'search filenames'], ['⌘L', 'filter panel'], ['P', 'compare selected images (2–6)'], ['⌘⇧C', 'contact sheet / browse'],
+            ['⌘F', 'search filenames'], ['⌘⌥R', 'rescan folder'], ['⌘L', 'filter panel'], ['P', 'compare selected images (2–6)'], ['⌘⇧C', 'contact sheet / browse'],
             ['O', 'open in editor'],
           ]},
           { label: 'Select & group', rows: [
@@ -779,6 +779,7 @@
           if (f) { f.lost = true; f.lostAt = Date.now(); }
           counts.lost += 1;
         } else if (evt.type === 'moved') {
+          if (confirmedPaths) confirmedPaths.add(evt.filePath); // re-confirms a seeded tile, like 'added'
           const prev = state.files.get(evt.from);
           const meta = prev || { path: evt.filePath, tags: [], addedAt: Date.now(), info: null, dims: null };
           state.files.delete(evt.from);
@@ -1711,6 +1712,18 @@
         hydrateTags();
         hydrateGroups();
       }
+      // Force a fresh scan of the active tab's root: drops the in-memory
+      // snapshot (so nothing stale is pre-seeded), restarts the watcher — which
+      // re-lists every file, re-hashes files matching lost rows to re-attach
+      // moved/renamed tags, and marks tracked rows whose file is gone as lost.
+      async function refreshFolder() {
+        const tab = activeTab.value;
+        if (!tab || !tab.rootDir) return;
+        tab.folderFilter = state.folderFilter;
+        tabSnapshots.delete(tab.rootDir);
+        toast('Rescanning folder…');
+        await activateTab(tab);
+      }
       async function selectTab(id) {
         if (id === state.activeTabId) return;
         const tab = state.tabs.find((t) => t.id === id);
@@ -2004,6 +2017,7 @@
         if (e.metaKey && e.key === 'a') { e.preventDefault(); selectAll(); return; }
         if (e.metaKey && e.key.toLowerCase() === 'f') { e.preventDefault(); nextTick(() => document.getElementById('search-input')?.focus()); return; }
         if (e.metaKey && e.key.toLowerCase() === 'l') { e.preventDefault(); state.filterPanelOpen = !state.filterPanelOpen; return; }
+        if (e.metaKey && e.altKey && e.key.toLowerCase() === 'r') { e.preventDefault(); refreshFolder(); return; }
         if (e.metaKey && e.key.toLowerCase() === 't') { e.preventDefault(); addTab(); return; }
         if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); toggleSheetView(); return; }
         if (e.metaKey && e.key === 'g' && e.shiftKey) { e.preventDefault(); if (activeGroupId.value) ungroup(activeGroupId.value); return; }
@@ -2148,7 +2162,7 @@
       return {
         state, activeTab, watchingCount, shortenPath, fileUrl, fmtBytes, fmtDate, fmtElapsed,
         TAGS, tagMeta, extname, basename, stripExt,
-        chooseFolder, useDefaultFolder, beginWatch,
+        chooseFolder, useDefaultFolder, beginWatch, refreshFolder,
         groupMembership, groupById, allFiles, tagCounts, typeCounts, visibleFiles, sortedFiles,
         gridEntries, renderedEntries, selectionSet, expandedGroupList, navOrder, filmstripOrder, activePath, activeFile, activeGroupId, systemState, isNew,
         compareMode, compareGridDims, comparableSelectionCount, openCompareView, exitCompareToSingle,
@@ -2208,6 +2222,7 @@
           <div class="vdivider"></div>
           <div class="chip-row">
             <div class="chip"><span @click="rotateSelection(-90)">↺</span><span>Rotate</span><span @click="rotateSelection(90)">↻</span></div>
+            <div class="chip" title="Rescan folder (⌘⌥R)" @click="refreshFolder">↻ Rescan</div>
             <div class="chip" :class="{ accent: state.selection.length >= 2 }" @click="groupSelection">Group {{ state.selection.length }}</div>
             <div class="chip" :class="{ disabled: comparableSelectionCount < 2, accent: comparableSelectionCount >= 2 }" @click="openCompareView">Compare <span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">P</span></div>
             <div class="chip" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 190; state.tagMenu.y = 74">Tag ▾</div>
@@ -2393,7 +2408,10 @@
                       <div v-for="p in entry.members" :key="p" class="tile"
                            :class="{ selected: selectionSet.has(p) }" @click="onTileClick($event, p)" @dblclick="openViewer(p)">
                         <div class="tile-thumb"><img :src="gridThumbSrc(p)" /></div>
-                        <div class="tile-name"><span class="fname">{{ state.files.get(p).name }}</span></div>
+                        <div class="tile-name">
+                          <span v-if="state.files.get(p).tags[0]" class="swatch" :style="{ background: tagMeta(state.files.get(p).tags[0]).var }"></span>
+                          <span class="fname">{{ state.files.get(p).name }}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
