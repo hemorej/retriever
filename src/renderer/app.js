@@ -49,7 +49,7 @@
   ];
   const TAG_BY_KEY = { 1: 'select', 2: 'reject', 3: 'maybe', 4: 'published' };
   // Sort a folder falls back to when the user has never explicitly sorted it.
-  const DEFAULT_SORT = { mode: 'date', dir: 'desc' };
+  const DEFAULT_SORT = { mode: 'name', dir: 'asc' };
   // Contact-sheet layout/export settings are per-tab (README: "remembered
   // per tab"), so each tab gets its own copy rather than one shared object.
   function defaultSheet() {
@@ -2277,12 +2277,12 @@
           </div>
           <div class="vdivider"></div>
           <div class="chip-row">
-            <div class="chip"><span @click="rotateSelection(-90)">↺</span><span>Rotate</span><span @click="rotateSelection(90)">↻</span></div>
-            <div class="chip" title="Write pending rotation into the file(s)" @click="saveRotationsToDisk">Save rotation</div>
+            <div class="chip" :class="{ disabled: !state.selection.length }"><span @click="rotateSelection(-90)">↺</span><span>Rotate</span><span @click="rotateSelection(90)">↻</span></div>
+            <div class="chip" :class="{ disabled: !state.selection.length }" title="Write pending rotation into the file(s)" @click="saveRotationsToDisk">Save rotation</div>
             <div class="chip" title="Rescan folder (⌘⌥R)" @click="refreshFolder">↻ Rescan</div>
-            <div class="chip" :class="{ accent: state.selection.length >= 2 }" @click="groupSelection">Group {{ state.selection.length }}</div>
+            <div class="chip" :class="{ disabled: state.selection.length < 2, accent: state.selection.length >= 2 }" @click="groupSelection">Group {{ state.selection.length }}</div>
             <div class="chip" :class="{ disabled: comparableSelectionCount < 2, accent: comparableSelectionCount >= 2 }" @click="openCompareView">Compare <span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">P</span></div>
-            <div class="chip" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 190; state.tagMenu.y = 74">Tag ▾</div>
+            <div class="chip" :class="{ disabled: !state.selection.length }" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 190; state.tagMenu.y = 74">Tag ▾</div>
             <div class="chip" :class="{ disabled: state.selection.length !== 1 }" @click="startInlineRename(activePath)">Rename…</div>
             <div class="chip" :class="{ disabled: !state.selection.length }" @click="state.cleanupDialogOpen = true">Clean metadata</div>
           </div>
@@ -2292,7 +2292,8 @@
             <input id="search-input" v-model="state.search" placeholder="search filenames" />
           </div>
           <div class="chip" @click="state.filterPanelOpen = !state.filterPanelOpen">Filter <span class="chip-count" v-if="state.filters.tags.size + state.filters.types.size">{{ state.filters.tags.size + state.filters.types.size }}</span></div>
-          <div class="chip" @click="state.sortMode = state.sortMode === 'name' ? 'date' : 'name'">Sort: {{ state.sortMode === 'name' ? 'Name' : 'Date' }} <span @click.stop="state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc'">{{ state.sortDir === 'asc' ? '↑' : '↓' }}</span></div>
+          <div class="chip" title="Switch sort field (⌥⌘1 name, ⌥⌘2 date)" @click="state.sortMode = state.sortMode === 'name' ? 'date' : 'name'">Sort: {{ state.sortMode === 'name' ? 'Name' : 'Date' }}</div>
+          <div class="chip" :title="state.sortDir === 'asc' ? 'Ascending — click for descending' : 'Descending — click for ascending'" @click="state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc'">{{ state.sortDir === 'asc' ? '↑' : '↓' }}</div>
           <div class="size-slider-group">
             <svg width="10" height="10" viewBox="0 0 12 12" fill="#6e6b68" @click="state.thumbSize = 90"><rect x="0" y="0" width="5" height="5"/><rect x="7" y="0" width="5" height="5"/><rect x="0" y="7" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/></svg>
             <div class="size-slider" @mousedown="onSliderPointerDown">
