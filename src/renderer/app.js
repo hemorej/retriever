@@ -2392,7 +2392,7 @@
                       <img draggable="false" loading="lazy" :src="gridThumbSrc(entry.file.path)" :style="{ transform: 'rotate(' + (state.rotations[entry.file.path] || 0) + 'deg)' }" />
                     </div>
                     <div v-if="state.inlineRenamePath === entry.file.path" class="tile-rename" @click.stop>
-                      <input v-model="state.inlineRenameValue" @keydown.enter.stop="commitInlineRename" @keydown.esc.stop="cancelInlineRename" @blur="commitInlineRename" autofocus />
+                      <input v-model="state.inlineRenameValue" @keydown.enter.stop="commitInlineRename" @keydown.esc.stop="cancelInlineRename" @blur="commitInlineRename" v-focus />
                     </div>
                     <div v-else class="tile-name">
                       <span v-if="isNew(entry.file)" class="new-flag">new</span>
@@ -2798,5 +2798,15 @@
 
   const app = createApp(App);
   app.component('tree-node', TreeNode);
+  // Focus + select on mount. The `autofocus` attribute only works on page load,
+  // not for inputs Vue inserts later (inline rename). Retried next frame so a
+  // context-menu click finishing doesn't steal focus back.
+  app.directive('focus', {
+    mounted(el) {
+      const go = () => { el.focus(); el.select(); };
+      go();
+      requestAnimationFrame(go);
+    },
+  });
   app.mount('#app');
 })();

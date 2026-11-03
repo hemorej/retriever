@@ -133,6 +133,14 @@ function addTag(db, fileId, tagName) {
   ).run(fileId, tag.id);
 }
 
+// Replaces all of the file's tags with tagName (one tag per file).
+function setTag(db, fileId, tagName) {
+  db.transaction(() => {
+    db.prepare('DELETE FROM file_tags WHERE file_id = ?').run(fileId);
+    addTag(db, fileId, tagName);
+  })();
+}
+
 function removeTag(db, fileId, tagName) {
   db.prepare(
     'DELETE FROM file_tags WHERE file_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)'
@@ -241,6 +249,7 @@ module.exports = {
   reattachPath,
   deleteFile,
   addTag,
+  setTag,
   removeTag,
   clearTags,
   getTagsForFile,

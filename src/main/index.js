@@ -140,7 +140,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('tag-file', async (_event, { filePath, tagName }) => {
     const row = await ensureTracked(database, filePath);
-    db.addTag(database, row.id, tagName);
+    db.setTag(database, row.id, tagName); // one tag per file: replaces any previous
     return { fileId: row.id, hash: row.hash, tags: db.getTagsForFile(database, row.id) };
   });
 
