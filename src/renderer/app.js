@@ -175,6 +175,7 @@
         <div class="sep"></div>
         <div class="item" :class="{ disabled: !canGroup }" @click="$emit('action', 'group')"><span>Group selection</span><span class="hint">⌘G</span></div>
         <div class="item" @click="$emit('action', 'rotate')"><span>Rotate</span><span class="hint">[ ]</span></div>
+        <div class="item" @click="$emit('action', 'save-rotation')"><span>Save rotation to file</span></div>
         <div class="item" @click="$emit('action', 'strip-metadata')"><span>Remove all metadata</span></div>
         <div class="sep"></div>
         <div class="item" @click="$emit('action', 'reveal')"><span>Reveal in Finder</span></div>
@@ -565,7 +566,7 @@
             </div>
           </div>
           <div class="shortcuts-footer">
-            <span>⌘Z undo — covers tag changes and rotations</span>
+            <span>⌘Z undo — covers tag changes and unsaved rotations</span>
             <span class="push">⌘, preferences</span>
           </div>
         </div>
@@ -583,6 +584,7 @@
         groups: [],
         expandedGroups: reactive(new Set()),
         rotations: reactive({}),
+        fileRev: reactive({}), // bumped when a file is rewritten on disk, to bust <img> caches
         selection: [],
         folderFilter: null,
         expandedFolders: reactive(new Set()),
@@ -1206,6 +1208,44 @@
         }
       }
 
+      // Writes the pending (session-only) rotations of the selection into the
+      // files themselves — lossless, see main/rotate-worker.js. Fresh
+      // thumbnails/previews are loaded *before* the CSS rotation is cleared so
+      // the tile never flashes through a double-rotated state.
+      async function saveRotationsToDisk() {
+        const items = [...state.selection]
+          .filter((p) => state.rotations[p])
+          .map((p) => ({ filePath: p, degrees: state.rotations[p] }));
+        if (!items.length) { toast('No pending rotations to save — rotate with [ ] first.'); return; }
+        let results;
+        try { results = await window.retriever.rotateFiles(items); } catch (e) { toast(e.message); return; }
+        for (const r of results.filter((x) => x.ok)) {
+          const p = r.filePath;
+          state.fileRev[p] = (state.fileRev[p] || 0) + 1;
+          try {
+            const thumb = await window.retriever.getThumbnail(p);
+            state.gridThumbs.set(p, thumb ? fileUrl(thumb) + '?r=' + state.fileRev[p] : '');
+            if (isTiffPath(p)) {
+              state.imagePreviews.set(p, await window.retriever.getImagePreview(p));
+            } else {
+              await new Promise((resolve) => { const img = new Image(); img.onload = img.onerror = resolve; img.src = previewSrc(p); });
+            }
+          } catch { /* the watcher's change event will still refresh size/mtime */ }
+          const f = state.files.get(p);
+          if (f) { f.dims = null; f.info = null; }
+          state.rotations[p] = 0;
+          // Rotation undo entries for this file no longer describe anything.
+          state.undoStack = state.undoStack.filter((a) => !(a.type === 'rotate' && a.path === p));
+        }
+        const failed = results.filter((x) => !x.ok);
+        const done = results.length - failed.length;
+        const tagged = results.filter((x) => x.ok && x.method === 'tag').length;
+        let msg = done ? `Saved rotation to ${done} file${done === 1 ? '' : 's'}` : '';
+        if (tagged) msg += ` (${tagged} via EXIF orientation tag — pixels untouched)`;
+        if (failed.length) msg += `${msg ? ' · ' : ''}${failed.length} failed: ${failed[0].error}`;
+        toast(msg);
+      }
+
       // ---------- grouping ----------
       async function groupSelection() {
         if (state.selection.length < 2) { toast('Select two or more files to group them.'); return; }
@@ -1430,6 +1470,7 @@
           case 'tag': state.tagMenu.open = true; state.tagMenu.x = state.contextMenu.x + 10; state.tagMenu.y = state.contextMenu.y + 10; break;
           case 'group': groupSelection(); break;
           case 'rotate': rotateSelection(90); break;
+          case 'save-rotation': saveRotationsToDisk(); break;
           case 'strip-metadata': state.cleanupDialogOpen = true; break;
           case 'reveal': revealInFinder(p); break;
           case 'delete': confirmFileDelete(state.selection.length ? state.selection : [p]); break;
@@ -1915,7 +1956,7 @@
         }
       }
       function previewSrc(p) {
-        if (!p || !isTiffPath(p)) return fileUrl(p);
+        if (!p || !isTiffPath(p)) return fileUrl(p) + (state.fileRev[p] ? '?r=' + state.fileRev[p] : '');
         const cached = state.imagePreviews.get(p);
         if (cached) return cached;
         if (cached === undefined) loadImagePreview(p);
@@ -2177,7 +2218,7 @@
         gridAreaEl, onGridScroll, tileGridPosition, rowHasBox, gridRowHeight, gridRowTemplate, gridTotalRows,
         onTileClick, onGridAreaClick, selectSingle, selectAll, treeAutoExpandDepth, saveSession,
         applyTagToSelection, clearTagsForSelection, pickFromTagMenu,
-        onTileDragStart, transferFilesTo, answerConflict, rotateSelection, groupSelection, ungroup, toggleExpand, addSelectionToGroup, removeSelectionFromGroup, groupSelectionAction,
+        onTileDragStart, transferFilesTo, answerConflict, rotateSelection, saveRotationsToDisk, groupSelection, ungroup, toggleExpand, addSelectionToGroup, removeSelectionFromGroup, groupSelectionAction,
         duplicateFiles, startInlineRename, commitInlineRename, cancelInlineRename, commitMassRename, revealInFinder,
         openPrivacySettings, openContainingFolder,
         moveOrCopySelection, stripMetadataForSelection, openInExternalEditor,
@@ -2227,6 +2268,7 @@
           <div class="vdivider"></div>
           <div class="chip-row">
             <div class="chip"><span @click="rotateSelection(-90)">↺</span><span>Rotate</span><span @click="rotateSelection(90)">↻</span></div>
+            <div class="chip" title="Write pending rotation into the file(s)" @click="saveRotationsToDisk">Save rotation</div>
             <div class="chip" title="Rescan folder (⌘⌥R)" @click="refreshFolder">↻ Rescan</div>
             <div class="chip" :class="{ accent: state.selection.length >= 2 }" @click="groupSelection">Group {{ state.selection.length }}</div>
             <div class="chip" :class="{ disabled: comparableSelectionCount < 2, accent: comparableSelectionCount >= 2 }" @click="openCompareView">Compare <span style="color:#7d7a77;font-family:'Geist Mono',ui-monospace,monospace">P</span></div>
@@ -2504,6 +2546,7 @@
             <div class="chip">Fit screen</div>
             <div class="chip">100%</div>
             <div class="chip"><span @click="rotateSelection(-90)">↺</span> Rotate <span @click="rotateSelection(90)">↻</span></div>
+            <div class="chip" title="Write pending rotation into the file(s)" @click="saveRotationsToDisk">Save rotation</div>
             <div class="chip" @click.stop="state.tagMenu.open = true; state.tagMenu.x = 300; state.tagMenu.y = 60">Tag ▾</div>
             <div class="chip" @click="openInExternalEditor(activePath)">Open in Editor</div>
           </template>

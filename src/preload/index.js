@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('retriever', {
   moveFiles: (filePaths, destDir, resolutions) => ipcRenderer.invoke('move-files', { filePaths, destDir, resolutions }),
   copyFiles: (filePaths, destDir, resolutions) => ipcRenderer.invoke('copy-files', { filePaths, destDir, resolutions }),
   stripMetadata: (filePaths, options) => ipcRenderer.invoke('strip-metadata', { filePaths, options }),
+  rotateFiles: (items) => ipcRenderer.invoke('rotate-files', items),
   openInExternalEditor: (filePath) => ipcRenderer.invoke('open-in-external-editor', filePath),
   listSubfolders: (dir) => ipcRenderer.invoke('list-subfolders', dir),
   listOtherFiles: (dir) => ipcRenderer.invoke('list-other-files', dir),
