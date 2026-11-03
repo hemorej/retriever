@@ -49,7 +49,7 @@
   ];
   const TAG_BY_KEY = { 1: 'select', 2: 'reject', 3: 'maybe', 4: 'published' };
   // Sort a folder falls back to when the user has never explicitly sorted it.
-  const DEFAULT_SORT = { mode: 'date', dir: 'desc' };
+  const DEFAULT_SORT = { mode: 'name', dir: 'asc' };
   // Contact-sheet layout/export settings are per-tab (README: "remembered
   // per tab"), so each tab gets its own copy rather than one shared object.
   function defaultSheet() {
@@ -2292,7 +2292,8 @@
             <input id="search-input" v-model="state.search" placeholder="search filenames" />
           </div>
           <div class="chip" @click="state.filterPanelOpen = !state.filterPanelOpen">Filter <span class="chip-count" v-if="state.filters.tags.size + state.filters.types.size">{{ state.filters.tags.size + state.filters.types.size }}</span></div>
-          <div class="chip" @click="state.sortMode = state.sortMode === 'name' ? 'date' : 'name'">Sort: {{ state.sortMode === 'name' ? 'Name' : 'Date' }} <span @click.stop="state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc'">{{ state.sortDir === 'asc' ? '↑' : '↓' }}</span></div>
+          <div class="chip" title="Switch sort field (⌥⌘1 name, ⌥⌘2 date)" @click="state.sortMode = state.sortMode === 'name' ? 'date' : 'name'">Sort: {{ state.sortMode === 'name' ? 'Name' : 'Date' }}</div>
+          <div class="chip" :title="state.sortDir === 'asc' ? 'Ascending — click for descending' : 'Descending — click for ascending'" @click="state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc'">{{ state.sortDir === 'asc' ? '↑' : '↓' }}</div>
           <div class="size-slider-group">
             <svg width="10" height="10" viewBox="0 0 12 12" fill="#6e6b68" @click="state.thumbSize = 90"><rect x="0" y="0" width="5" height="5"/><rect x="7" y="0" width="5" height="5"/><rect x="0" y="7" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/></svg>
             <div class="size-slider" @mousedown="onSliderPointerDown">
