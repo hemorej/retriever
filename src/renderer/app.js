@@ -788,6 +788,11 @@
           meta.dir = dirname(evt.filePath);
           meta.lost = false;
           meta.lostAt = null;
+          // A fresh scan has no entry for the old path, and the tag snapshot
+          // (persistedTags) was read before the row was re-attached — so take
+          // the tags the main process just read from the db.
+          if (evt.tags && evt.tags.length && !(meta.tags && meta.tags.length)) meta.tags = [...evt.tags];
+          if (evt.tags && evt.tags.length) persistedTags[evt.filePath] = [...evt.tags];
           state.files.set(evt.filePath, meta);
           const i = state.selection.indexOf(evt.from);
           if (i !== -1) state.selection[i] = evt.filePath;

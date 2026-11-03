@@ -93,6 +93,12 @@ function createWatcher({ rootDir, database, onEvent: emit }) {
   // real `from` in its 'moved' event instead of null.
   const lastKnownPath = new Map();
 
+  // A rename of a tracked file can reach us as add(new) BEFORE unlink(old).
+  // At add time nothing is lost yet, so the new path is reported as a plain
+  // untracked file; remember such adds briefly so handleUnlink can pair them.
+  const RECENT_ADD_MS = 30000;
+  const recentAdds = new Map(); // filePath -> { size, mtimeMs, at }
+
   const origClose = watcher.close.bind(watcher);
   watcher.close = () => { closed = true; return origClose(); };
 
@@ -151,12 +157,32 @@ function createWatcher({ rootDir, database, onEvent: emit }) {
         const from = lastKnownPath.get(candidate.id) ?? candidate.path;
         lastKnownPath.delete(candidate.id);
         db.reattachPath(database, hash, filePath, mtimeMs);
-        onEvent({ type: 'moved', filePath, from, fileId: candidate.id });
+        onEvent({ type: 'moved', filePath, from, fileId: candidate.id, tags: db.getTagsForFile(database, candidate.id) });
         return;
       }
     }
 
+    const now = Date.now();
+    for (const [p, r] of recentAdds) if (now - r.at > RECENT_ADD_MS) recentAdds.delete(p);
+    recentAdds.set(filePath, { size, mtimeMs, at: now });
     onEvent({ type: 'added', filePath, size, mtimeMs, tracked: false });
+  }
+
+  // Unlink-after-add half of a rename: find a just-reported untracked file with
+  // the same content and re-attach the lost row (and its tags) to it.
+  async function rematchRecentAdd(row, oldPath) {
+    for (const [newPath, r] of recentAdds) {
+      if (r.size !== row.size || newPath === oldPath) continue;
+      let hash;
+      try { hash = await limitHash(() => hashFile(newPath)); } catch { continue; }
+      if (closed) return;
+      if (hash !== row.hash || db.getByPath(database, newPath)) continue;
+      recentAdds.delete(newPath);
+      lastKnownPath.delete(row.id);
+      db.reattachPath(database, row.hash, newPath, r.mtimeMs);
+      onEvent({ type: 'moved', filePath: newPath, from: oldPath, fileId: row.id, tags: db.getTagsForFile(database, row.id) });
+      return;
+    }
   }
 
   async function handleChange(filePath, stats) {
@@ -172,11 +198,13 @@ function createWatcher({ rootDir, database, onEvent: emit }) {
   function handleUnlink(filePath) {
     if (!isImage(filePath)) return;
 
+    recentAdds.delete(filePath);
     const row = db.getByPath(database, filePath);
     if (row) {
       lastKnownPath.set(row.id, filePath);
       db.markLost(database, filePath);
       onEvent({ type: 'lost', filePath, fileId: row.id });
+      rematchRecentAdd(row, filePath).catch((err) => console.error('[watcher] rematch failed', err));
     } else {
       onEvent({ type: 'removed', filePath, tracked: false });
     }
