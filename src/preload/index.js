@@ -38,6 +38,12 @@ contextBridge.exposeInMainWorld('retriever', {
   exportContactSheet: (payload) => ipcRenderer.invoke('export-contact-sheet', payload),
   loadSession: () => ipcRenderer.invoke('load-session'),
   saveSession: (session) => ipcRenderer.invoke('save-session', session),
+  setMenuState: (state) => ipcRenderer.send('set-menu-state', state),
+  onMenuAction: (callback) => {
+    const listener = (_event, id) => callback(id);
+    ipcRenderer.on('menu-action', listener);
+    return () => ipcRenderer.removeListener('menu-action', listener);
+  },
   onFsEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('fs-event', listener);
