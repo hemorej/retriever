@@ -3,7 +3,7 @@
 // before CPU is actually the limit on modern machines.
 process.env.UV_THREADPOOL_SIZE = String(Math.max(4, require('os').cpus().length));
 
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -167,7 +167,9 @@ function buildAppMenu() {
       ],
     },
     {
-      label: 'Edit',
+      // Trailing zero-width space: AppKit only auto-injects AutoFill / Emoji &
+      // Symbols into a menu titled exactly "Edit", and looks identical on screen.
+      label: 'Edit\u200B',
       submenu: [
         { role: 'undo' },
         { role: 'redo' },
@@ -202,7 +204,14 @@ app.whenReady().then(() => {
   // for the first (bold) item on unpackaged dev runs, ignoring
   // app.setName() — building our own template with the real name is the
   // only way to fix that outside a packaged build.
-  if (process.platform === 'darwin') buildAppMenu();
+  if (process.platform === 'darwin') {
+    // AppKit injects Start Dictation… and Emoji & Symbols into any menu titled
+    // "Edit"; these per-app defaults tell it not to. Must be set before the
+    // menu is built.
+    systemPreferences.setUserDefault('NSDisabledDictationMenuItem', 'boolean', true);
+    systemPreferences.setUserDefault('NSDisabledCharacterPaletteMenuItem', 'boolean', true);
+    buildAppMenu();
+  }
   database = db.openDb(app.getPath('userData'));
   sessionPath = path.join(app.getPath('userData'), 'session.json');
   thumbnails.initThumbnailCache(app.getPath('userData'));
