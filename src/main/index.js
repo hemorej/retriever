@@ -76,8 +76,12 @@ function createWindow() {
       // multi-tab browsing tool, not something that needs background tabs
       // doing full-rate work.
       backgroundThrottling: true,
+      // No devtools (menu item or ⌥⌘I) in packaged builds.
+      devTools: !app.isPackaged,
     },
   });
+  // Fill the screen on launch (macOS "zoom" — menu bar and Dock stay visible).
+  mainWindow.maximize();
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 }
 
@@ -93,37 +97,121 @@ function startWatching(rootDir) {
   });
 }
 
+
+// ---- application menu ----
+// The File menu mirrors the grid/viewer toolbar. The renderer owns the
+// selection state, so it pushes a small `menuState` snapshot here
+// ('set-menu-state') and we rebuild the menu with matching enabled flags;
+// clicks go back as a 'menu-action' IPC message. Items show their shortcut
+// via registerAccelerator:false — the renderer's own keydown handler stays
+// the single place shortcuts are actually handled.
+let menuState = { viewMode: 'grid', hasFolder: false, selection: 0, comparable: 0, compare: false };
+
+function buildAppMenu() {
+  const m = menuState;
+  const editable = m.viewMode !== 'sheet' && !m.compare;
+  const hasSel = editable && m.selection > 0;
+  const act = (id) => () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('menu-action', id);
+  };
+  const item = (label, id, enabled, accelerator) => ({
+    label,
+    enabled,
+    click: act(id),
+    ...(accelerator ? { accelerator, registerAccelerator: false } : {}),
+  });
+  const template = [
+    {
+      label: 'Retriever',
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'File',
+      submenu: [
+        item('Rotate Left', 'rotate-left', hasSel, '['),
+        item('Rotate Right', 'rotate-right', hasSel, ']'),
+        item('Save Rotation', 'save-rotation', hasSel, 'CmdOrCtrl+S'),
+        { type: 'separator' },
+        item('Rescan Folder', 'rescan', m.viewMode === 'grid' && m.hasFolder, 'CmdOrCtrl+Alt+R'),
+        { type: 'separator' },
+        item('Group Selection', 'group', editable && m.selection >= 2, 'CmdOrCtrl+G'),
+        item('Compare', 'compare', editable && m.comparable >= 2, 'P'),
+        {
+          label: 'Tag',
+          enabled: hasSel,
+          submenu: [
+            item('Select', 'tag:select', hasSel, '1'),
+            item('Reject', 'tag:reject', hasSel, '2'),
+            item('Maybe', 'tag:maybe', hasSel, '3'),
+            item('Published', 'tag:published', hasSel, '4'),
+            { type: 'separator' },
+            item('Clear Tags', 'tag:clear', hasSel, '0'),
+          ],
+        },
+        { type: 'separator' },
+        item('Rename…', 'rename', editable && m.selection === 1, 'CmdOrCtrl+R'),
+        item('Clean Metadata…', 'clean-metadata', hasSel, 'CmdOrCtrl+Backspace'),
+        item('Open in Editor', 'open-editor', editable && m.selection >= 1, 'O'),
+        { type: 'separator' },
+        { role: 'close' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'delete' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    { role: 'windowMenu' },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 app.whenReady().then(() => {
   // Electron's auto-generated default menu hardcodes the "Electron" label
   // for the first (bold) item on unpackaged dev runs, ignoring
   // app.setName() — building our own template with the real name is the
   // only way to fix that outside a packaged build.
-  if (process.platform === 'darwin') {
-    const template = [
-      {
-        label: 'Retriever',
-        submenu: [
-          { role: 'about' },
-          { type: 'separator' },
-          { role: 'services' },
-          { type: 'separator' },
-          { role: 'hide' },
-          { role: 'hideOthers' },
-          { role: 'unhide' },
-          { type: 'separator' },
-          { role: 'quit' },
-        ],
-      },
-      { role: 'editMenu' },
-      { role: 'viewMenu' },
-      { role: 'windowMenu' },
-    ];
-    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-  }
+  if (process.platform === 'darwin') buildAppMenu();
   database = db.openDb(app.getPath('userData'));
   sessionPath = path.join(app.getPath('userData'), 'session.json');
   thumbnails.initThumbnailCache(app.getPath('userData'));
   createWindow();
+
+  ipcMain.on('set-menu-state', (_event, next) => {
+    menuState = { ...menuState, ...next };
+    if (process.platform === 'darwin') buildAppMenu();
+  });
 
   ipcMain.handle('choose-folder', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {

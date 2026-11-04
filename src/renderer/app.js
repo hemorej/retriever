@@ -2110,7 +2110,40 @@
         if (e.key === 'Meta' || e.key === '/') state.shortcutsHeld = false;
       }
 
+      // ---------- native File menu ----------
+      // Push the bits of state the menu's enabled flags depend on; main
+      // rebuilds the menu from them. Actions come back as ids.
+      function handleMenuAction(id) {
+        switch (id) {
+          case 'rotate-left': rotateSelection(-90); break;
+          case 'rotate-right': rotateSelection(90); break;
+          case 'save-rotation': saveRotationsToDisk(); break;
+          case 'rescan': refreshFolder(); break;
+          case 'group': groupSelection(); break;
+          case 'compare': openCompareView(); break;
+          case 'tag:clear': clearTagsForSelection(); break;
+          case 'rename': if (activePath.value) startInlineRename(activePath.value); break;
+          case 'clean-metadata': if (state.selection.length) state.cleanupDialogOpen = true; break;
+          case 'open-editor': if (activePath.value) openInExternalEditor(activePath.value); break;
+          default:
+            if (id.startsWith('tag:')) toggleTagOnSelection(id.slice(4));
+        }
+      }
+      let stopMenuActions = null;
+
       onMounted(() => {
+        stopMenuActions = window.retriever.onMenuAction(handleMenuAction);
+        watch(
+          () => ({
+            viewMode: state.viewMode,
+            hasFolder: !!activeTab.value.rootDir,
+            selection: state.selection.length,
+            comparable: comparableSelectionCount.value,
+            compare: compareMode.value,
+          }),
+          (menuState) => window.retriever.setMenuState(menuState),
+          { immediate: true, deep: true },
+        );
         window.addEventListener('keydown', onKeydown);
         window.addEventListener('keyup', onKeyup);
         window.addEventListener('click', () => { state.contextMenu.open = false; state.tagMenu.open = false; state.folderContextMenu.open = false; });
@@ -2182,6 +2215,7 @@
         });
       });
       onUnmounted(() => {
+        if (stopMenuActions) stopMenuActions();
         window.removeEventListener('keydown', onKeydown);
         window.removeEventListener('keyup', onKeyup);
         if (gridResizeObserver) gridResizeObserver.disconnect();
