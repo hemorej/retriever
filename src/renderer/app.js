@@ -2114,6 +2114,11 @@
       // Push the bits of state the menu's enabled flags depend on; main
       // rebuilds the menu from them. Actions come back as ids.
       function handleMenuAction(id) {
+        // Bare-key accelerators (1–4, 0, [, ], P, O) still reach the menu on
+        // macOS while a text field has focus, bypassing onKeydown's typing
+        // guard — so skip them here when the user is typing.
+        const bareKey = id.startsWith('tag:') || ['rotate-left', 'rotate-right', 'compare', 'open-editor'].includes(id);
+        if (bareKey && (state.inlineRenamePath || isTypingTarget(document.activeElement))) return;
         switch (id) {
           case 'rotate-left': rotateSelection(-90); break;
           case 'rotate-right': rotateSelection(90); break;
