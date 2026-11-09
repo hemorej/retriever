@@ -370,7 +370,7 @@
     emits: ['close', 'rename'],
     data() {
       return {
-        literal: 'renamed', postfix: '', startAt: 1, separator: '_', caseMode: 'lower',
+        literal: 'renamed', postfix: '', startAt: 1, digits: 3, separator: '_', caseMode: 'lower',
         useCounter: true, useCaptureDate: false, useDimensions: false, useOriginalName: false, useFolder: false,
       };
     },
@@ -399,6 +399,11 @@
       focusPostfix() { this.$refs.postfixInput?.focus(); },
     },
     computed: {
+      // Zero-padding width for the counter; tolerate empty/invalid input while typing.
+      counterDigits() {
+        const n = Math.floor(Number(this.digits));
+        return Number.isFinite(n) ? Math.min(Math.max(n, 1), 10) : 3;
+      },
       previews() {
         return this.files.map((f, i) => {
           const ext = extname(f.path) ? '.' + extname(f.path) : '';
@@ -408,7 +413,7 @@
           if (this.useDimensions) parts.push(this.dimensionsStr(f));
           if (this.useOriginalName) parts.push(stripExt(f.name));
           if (this.useFolder) parts.push(this.folderName(f));
-          if (this.useCounter) parts.push(String(this.startAt + i).padStart(3, '0'));
+          if (this.useCounter) parts.push(String(this.startAt + i).padStart(this.counterDigits, '0'));
           let base = parts.join(this.separator) || stripExt(f.name);
           if (this.postfix) base += this.separator + this.postfix;
           if (this.caseMode === 'lower') base = base.toLowerCase();
@@ -434,7 +439,7 @@
                 <template v-if="useDimensions"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useDimensions = false">{dimensions}</span></template>
                 <template v-if="useOriginalName"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useOriginalName = false">{original name}</span></template>
                 <template v-if="useFolder"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useFolder = false">{folder}</span></template>
-                <template v-if="useCounter"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useCounter = false">{counter:{{ String(startAt).padStart(3,'0') }}}</span></template>
+                <template v-if="useCounter"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useCounter = false">{counter:{{ String(startAt).padStart(counterDigits,'0') }}}</span></template>
                 <span class="dot">·</span>
                 <input ref="postfixInput" v-model="postfix" placeholder="+ text after" style="background:transparent;border:none;outline:none;color:#f0cf72;font:11.5px 'Geist Mono',ui-monospace,monospace;width:90px" />
                 <span class="caret"></span>
@@ -451,6 +456,7 @@
             </div>
             <div class="opts-row">
               <span>Start at <input class="v" v-model.number="startAt" style="width:34px;background:transparent;border:none;outline:none" /></span>
+              <span>Digits <input class="v" v-model.number="digits" style="width:24px;background:transparent;border:none;outline:none" /></span>
               <span>Separator <input class="v" v-model="separator" style="width:20px;background:transparent;border:none;outline:none" /></span>
               <span>Case
                 <select v-model="caseMode" style="background:#232325;color:#e6e4e2;border:none;border-radius:4px;font:inherit">
