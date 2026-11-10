@@ -369,6 +369,11 @@ body {
 .btn.danger { background: var(--status-danger); color: #fff; font-weight: 600; }
 
 /* mass rename */
+.mass-rename-dialog { display: flex; flex-direction: column; max-height: calc(100vh - 48px); max-width: calc(100vw - 48px); }
+.mass-rename-dialog .dialog-head, .mass-rename-dialog .dialog-footer { flex: none; }
+.mass-rename-dialog .dialog-body { flex: 1 1 auto; min-height: 0; }
+.mass-rename-dialog .rename-table { flex: 1 1 auto; min-height: 120px; overflow-y: auto; }
+.mass-rename-dialog .rename-table .head { position: sticky; top: 0; z-index: 1; }
 .pattern-field { display: flex; align-items: center; gap: 6px; padding: 8px 9px; border-radius: 6px; background: var(--bg-well-dark); border: 1px solid var(--accent); flex-wrap: wrap; }
 .pattern-token { padding: 3px 8px; border-radius: 4px; font-size: 11.5px; font-family: var(--font-mono); background: var(--bg-control-alt); color: #dedbd8; }
 .pattern-token.literal { background: var(--accent-tint-strong); color: var(--accent-text); }

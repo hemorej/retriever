@@ -424,7 +424,7 @@
     },
     template: `
       <div class="overlay" @mousedown.self="$emit('close')">
-        <div class="dialog" style="width:720px">
+        <div class="dialog mass-rename-dialog" style="width:720px">
           <div class="dialog-head">
             <span class="title">Rename {{ files.length }} file{{ files.length === 1 ? '' : 's' }}</span>
             <span class="meta">{{ folderLabel }}</span>
