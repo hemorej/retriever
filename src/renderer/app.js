@@ -370,7 +370,7 @@
     emits: ['close', 'rename'],
     data() {
       return {
-        literal: 'renamed', postfix: '', startAt: 1, separator: '_', caseMode: 'lower',
+        literal: 'renamed', postfix: '', startAt: 1, digits: 3, separator: '_', caseMode: 'lower',
         useCounter: true, useCaptureDate: false, useDimensions: false, useOriginalName: false, useFolder: false,
       };
     },
@@ -399,6 +399,11 @@
       focusPostfix() { this.$refs.postfixInput?.focus(); },
     },
     computed: {
+      // Zero-padding width for the counter; tolerate empty/invalid input while typing.
+      counterDigits() {
+        const n = Math.floor(Number(this.digits));
+        return Number.isFinite(n) ? Math.min(Math.max(n, 1), 10) : 3;
+      },
       previews() {
         return this.files.map((f, i) => {
           const ext = extname(f.path) ? '.' + extname(f.path) : '';
@@ -408,7 +413,7 @@
           if (this.useDimensions) parts.push(this.dimensionsStr(f));
           if (this.useOriginalName) parts.push(stripExt(f.name));
           if (this.useFolder) parts.push(this.folderName(f));
-          if (this.useCounter) parts.push(String(this.startAt + i).padStart(3, '0'));
+          if (this.useCounter) parts.push(String(this.startAt + i).padStart(this.counterDigits, '0'));
           let base = parts.join(this.separator) || stripExt(f.name);
           if (this.postfix) base += this.separator + this.postfix;
           if (this.caseMode === 'lower') base = base.toLowerCase();
@@ -419,7 +424,7 @@
     },
     template: `
       <div class="overlay" @mousedown.self="$emit('close')">
-        <div class="dialog" style="width:720px">
+        <div class="dialog mass-rename-dialog" style="width:720px">
           <div class="dialog-head">
             <span class="title">Rename {{ files.length }} file{{ files.length === 1 ? '' : 's' }}</span>
             <span class="meta">{{ folderLabel }}</span>
@@ -434,7 +439,7 @@
                 <template v-if="useDimensions"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useDimensions = false">{dimensions}</span></template>
                 <template v-if="useOriginalName"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useOriginalName = false">{original name}</span></template>
                 <template v-if="useFolder"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useFolder = false">{folder}</span></template>
-                <template v-if="useCounter"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useCounter = false">{counter:{{ String(startAt).padStart(3,'0') }}}</span></template>
+                <template v-if="useCounter"><span class="dot">·</span><span class="pattern-token" title="click to remove" @click="useCounter = false">{counter:{{ String(startAt).padStart(counterDigits,'0') }}}</span></template>
                 <span class="dot">·</span>
                 <input ref="postfixInput" v-model="postfix" placeholder="+ text after" style="background:transparent;border:none;outline:none;color:#f0cf72;font:11.5px 'Geist Mono',ui-monospace,monospace;width:90px" />
                 <span class="caret"></span>
@@ -451,6 +456,7 @@
             </div>
             <div class="opts-row">
               <span>Start at <input class="v" v-model.number="startAt" style="width:34px;background:transparent;border:none;outline:none" /></span>
+              <span>Digits <input class="v" v-model.number="digits" style="width:24px;background:transparent;border:none;outline:none" /></span>
               <span>Separator <input class="v" v-model="separator" style="width:20px;background:transparent;border:none;outline:none" /></span>
               <span>Case
                 <select v-model="caseMode" style="background:#232325;color:#e6e4e2;border:none;border-radius:4px;font:inherit">
@@ -2102,8 +2108,10 @@
         }
         if (!e.metaKey && ['1', '2', '3', '4'].includes(e.key)) { toggleTagOnSelection(TAG_BY_KEY[e.key]); return; }
         if (!e.metaKey && e.key === '0') { clearTagsForSelection(); return; }
-        if (e.key === '[') { rotateSelection(-90); return; }
-        if (e.key === ']') { rotateSelection(90); return; }
+        // [ and ] are handled by the File menu accelerators (see
+        // handleMenuAction). On macOS those bare-key accelerators fire even
+        // with registerAccelerator:false, so handling them here too rotated
+        // twice (180°) per keypress.
         if ((e.key === 'Delete' || e.key === 'Backspace') && !e.metaKey && !e.altKey) { e.preventDefault(); if (state.selection.length) confirmFileDelete(state.selection); return; }
       }
       function onKeyup(e) {
@@ -2114,6 +2122,11 @@
       // Push the bits of state the menu's enabled flags depend on; main
       // rebuilds the menu from them. Actions come back as ids.
       function handleMenuAction(id) {
+        // Bare-key accelerators (1–4, 0, [, ], P, O) still reach the menu on
+        // macOS while a text field has focus, bypassing onKeydown's typing
+        // guard — so skip them here when the user is typing.
+        const bareKey = id.startsWith('tag:') || ['rotate-left', 'rotate-right', 'compare', 'open-editor'].includes(id);
+        if (bareKey && (state.inlineRenamePath || isTypingTarget(document.activeElement))) return;
         switch (id) {
           case 'rotate-left': rotateSelection(-90); break;
           case 'rotate-right': rotateSelection(90); break;
