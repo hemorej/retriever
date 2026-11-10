@@ -2108,8 +2108,10 @@
         }
         if (!e.metaKey && ['1', '2', '3', '4'].includes(e.key)) { toggleTagOnSelection(TAG_BY_KEY[e.key]); return; }
         if (!e.metaKey && e.key === '0') { clearTagsForSelection(); return; }
-        if (e.key === '[') { rotateSelection(-90); return; }
-        if (e.key === ']') { rotateSelection(90); return; }
+        // [ and ] are handled by the File menu accelerators (see
+        // handleMenuAction). On macOS those bare-key accelerators fire even
+        // with registerAccelerator:false, so handling them here too rotated
+        // twice (180°) per keypress.
         if ((e.key === 'Delete' || e.key === 'Backspace') && !e.metaKey && !e.altKey) { e.preventDefault(); if (state.selection.length) confirmFileDelete(state.selection); return; }
       }
       function onKeyup(e) {
