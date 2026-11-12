@@ -75,9 +75,9 @@
   };
 
   const Toast = {
-    props: { message: String },
+    props: { message: String, kind: { type: String, default: 'success' } },
     template: `<transition name="toast">
-      <div v-if="message" style="position:fixed;left:50%;bottom:38px;transform:translateX(-50%);background:rgba(32,32,34,.97);border:1px solid #3c3c3f;color:#e6e4e2;font-size:12px;padding:9px 14px;border-radius:7px;box-shadow:0 12px 30px -10px rgba(0,0,0,.7);z-index:100;font-family:Geist,system-ui,sans-serif">{{ message }}</div>
+      <div v-if="message" :style="kind === 'error' ? 'background:rgba(201,80,63,.88);border:1px solid rgba(201,80,63,1);color:#fff;' : kind === 'notice' ? 'background:rgba(230,180,34,.88);border:1px solid rgba(230,180,34,1);color:#1f1f21;' : 'background:rgba(74,157,95,.88);border:1px solid rgba(74,157,95,1);color:#fff;'" style="position:fixed;left:50%;bottom:38px;transform:translateX(-50%);font-weight:500;font-size:12px;padding:9px 14px;border-radius:7px;box-shadow:0 12px 30px -10px rgba(0,0,0,.7);z-index:100;font-family:Geist,system-ui,sans-serif">{{ message }}</div>
     </transition>`,
   };
 
@@ -629,14 +629,16 @@
         permissionDenied: reactive({ active: false, path: '', message: '' }),
         receipt: reactive({ line1: 'fsevents · —', line2: '', amber: false }),
         toastMessage: '',
+        toastKind: 'success',
         undoStack: [],
         now: Date.now(),
         hasIndexedOnce: false,
       });
 
       let toastTimer = null;
-      function toast(msg) {
+      function toast(msg, kind = 'success') {
         state.toastMessage = msg;
+        state.toastKind = kind;
         clearTimeout(toastTimer);
         toastTimer = setTimeout(() => { state.toastMessage = ''; }, 2600);
       }
@@ -1222,9 +1224,9 @@
         const items = [...state.selection]
           .filter((p) => state.rotations[p])
           .map((p) => ({ filePath: p, degrees: state.rotations[p] }));
-        if (!items.length) { toast('No pending rotations to save — rotate with [ ] first.'); return; }
+        if (!items.length) { toast('No pending rotations to save — rotate with [ ] first.', 'notice'); return; }
         let results;
-        try { results = await window.retriever.rotateFiles(items); } catch (e) { toast(e.message); return; }
+        try { results = await window.retriever.rotateFiles(items); } catch (e) { toast(e.message, 'error'); return; }
         for (const r of results.filter((x) => x.ok)) {
           const p = r.filePath;
           state.fileRev[p] = (state.fileRev[p] || 0) + 1;
@@ -1249,24 +1251,24 @@
         let msg = done ? `Saved rotation to ${done} file${done === 1 ? '' : 's'}` : '';
         if (tagged) msg += ` (${tagged} via EXIF orientation tag — pixels untouched)`;
         if (failed.length) msg += `${msg ? ' · ' : ''}${failed.length} failed: ${failed[0].error}`;
-        toast(msg);
+        toast(msg, failed.length ? 'error' : 'success');
       }
 
       // ---------- grouping ----------
       async function groupSelection() {
-        if (state.selection.length < 2) { toast('Select two or more files to group them.'); return; }
+        if (state.selection.length < 2) { toast('Select two or more files to group them.', 'notice'); return; }
         const members = [...state.selection];
         const key = members[0];
         const name = stripExt(key) + '_seq';
         try {
           const id = await window.retriever.createGroup(name, members);
           state.groups.push({ id, name, memberPaths: members, keyPath: key });
-        } catch (e) { toast(e.message); }
+        } catch (e) { toast(e.message, 'error'); }
       }
       function ungroup(gid) {
         const i = state.groups.findIndex((g) => g.id === gid);
         if (i !== -1) { state.expandedGroups.delete(gid); state.groups.splice(i, 1); }
-        window.retriever.deleteGroup(gid).catch((e) => toast(e.message));
+        window.retriever.deleteGroup(gid).catch((e) => toast(e.message, 'error'));
       }
       function toggleExpand(gid) {
         state.expandedGroups.has(gid) ? state.expandedGroups.delete(gid) : state.expandedGroups.add(gid);
@@ -1277,7 +1279,7 @@
         const added = state.selection.filter((p) => !g.memberPaths.includes(p));
         if (!added.length) return;
         g.memberPaths.push(...added);
-        window.retriever.addToGroup(gid, added).catch((e) => toast(e.message));
+        window.retriever.addToGroup(gid, added).catch((e) => toast(e.message, 'error'));
       }
 
       function removeSelectionFromGroup(gid) {
@@ -1289,7 +1291,7 @@
         if (!remaining.length) { ungroup(gid); return; }
         g.memberPaths = remaining;
         if (!remaining.includes(g.keyPath)) g.keyPath = remaining[0];
-        window.retriever.removeFromGroup(gid, removed).catch((e) => toast(e.message));
+        window.retriever.removeFromGroup(gid, removed).catch((e) => toast(e.message, 'error'));
       }
       // Which dynamic action the expanded group's toolbar offers for the current
       // selection: 'add' (only outside files), 'remove' (only members), or null.
@@ -1304,12 +1306,12 @@
       // ---------- file ops ----------
       async function duplicateFiles(paths) {
         for (const p of paths) {
-          try { await window.retriever.duplicateFile(p); } catch (e) { toast(e.message); }
+          try { await window.retriever.duplicateFile(p); } catch (e) { toast(e.message, 'error'); }
         }
       }
       async function openInExternalEditor(p) {
         if (!p) return;
-        try { await window.retriever.openInExternalEditor(p); } catch (e) { toast(e.message); }
+        try { await window.retriever.openInExternalEditor(p); } catch (e) { toast(e.message, 'error'); }
       }
       async function stripMetadataForSelection(options) {
         const paths = [...state.selection]; // plain array — see moveOrCopySelection for why
@@ -1322,7 +1324,7 @@
           let msg = `Stripped metadata from ${done} file${done === 1 ? '' : 's'}`;
           if (skipped) msg += ` · ${skipped} unsupported format${skipped === 1 ? '' : 's'} skipped`;
           toast(msg);
-        } catch (e) { toast(e.message); }
+        } catch (e) { toast(e.message, 'error'); }
       }
       async function moveOrCopySelection(mode) {
         // Spread to a plain array — state.selection is a Vue reactive Proxy,
@@ -1385,13 +1387,13 @@
           if (r.skipped) notes.push(`${r.skipped} skipped`);
           const suffix = notes.length ? ` (${notes.join(', ')})` : '';
           if (r.failed.length) {
-            toast(`${moved}/${moved + r.failed.length} ${verb}, ${r.failed.length} failed${suffix}: ${r.failed[0].error}`);
+            toast(`${moved}/${moved + r.failed.length} ${verb}, ${r.failed.length} failed${suffix}: ${r.failed[0].error}`, 'error');
           } else if (moved) {
             toast(`${mode === 'move' ? 'Moved' : 'Copied'} ${moved} file${moved === 1 ? '' : 's'} to ${destName}${suffix}`);
           } else if (r.skipped) {
-            toast(`Nothing ${verb}${suffix}`);
+            toast(`Nothing ${verb}${suffix}`, 'notice');
           }
-        } catch (e) { toast(e.message); }
+        } catch (e) { toast(e.message, 'error'); }
       }
       // An untagged file's rename reaches us as removed+added (no `moved`),
       // which would strand the selection on the dead old path and leave the
@@ -1418,13 +1420,15 @@
         if (!p) return;
         const f = state.files.get(p);
         const ext = extname(p) ? '.' + extname(p) : '';
-        const newName = state.inlineRenameValue.trim() + ext;
+        const newBase = state.inlineRenameValue.trim();
+        const newName = newBase + ext;
         state.inlineRenamePath = null;
-        if (!f || !newName || newName === f.name) return;
+        // Empty base name is a no-op (`newName` would otherwise be just ".ext").
+        if (!f || !newBase || newName === f.name) return;
         try {
           await renameTracked(p, newName);
         } catch (e) {
-          toast(e.message);
+          toast(e.message, 'error');
         }
       }
       function cancelInlineRename() { state.inlineRenamePath = null; }
@@ -1435,7 +1439,7 @@
         const ext = extname(p) ? '.' + extname(p) : '';
         const newName = newBase.trim() + ext;
         if (!f || !newBase.trim() || newName === f.name) return;
-        try { await renameTracked(p, newName); } catch (e) { toast(e.message); }
+        try { await renameTracked(p, newName); } catch (e) { toast(e.message, 'error'); }
       }
 
       // Defined as a real function rather than inline in the template: an
@@ -1446,7 +1450,7 @@
       // there, breaking `window.retriever.*`.
       async function commitMassRename(previews) {
         for (const p of previews) {
-          try { await renameTracked(p.file.path, p.next); } catch (e) { toast(e.message); }
+          try { await renameTracked(p.file.path, p.next); } catch (e) { toast(e.message, 'error'); }
         }
         state.renameDialogOpen = false;
       }
@@ -1492,7 +1496,7 @@
         state.fileDeleteDialog.open = false;
         if (!paths.length) return;
         for (const p of paths) {
-          try { await window.retriever.trashPath(p); } catch (e) { toast(e.message); }
+          try { await window.retriever.trashPath(p); } catch (e) { toast(e.message, 'error'); }
         }
         toast(`Moved ${paths.length} file${paths.length === 1 ? '' : 's'} to Trash`);
         state.selection = state.selection.filter(p => !paths.includes(p));
@@ -1538,7 +1542,7 @@
         try {
           await window.retriever.renameFile(p, trimmed);
           toast(`Renamed to "${trimmed}"`);
-        } catch (e) { toast(e.message); }
+        } catch (e) { toast(e.message, 'error'); }
       }
       async function commitFolderDelete() {
         const p = state.folderDeleteDialog.path;
@@ -1548,7 +1552,7 @@
           await window.retriever.trashPath(p);
           toast(`Moved "${basename(p)}" to Trash`);
           if (state.folderFilter === p || state.folderFilter.startsWith(p + '/')) selectFolder(activeTab.value.rootDir);
-        } catch (e) { toast(e.message); }
+        } catch (e) { toast(e.message, 'error'); }
       }
 
       // ---------- viewer ----------
@@ -1570,8 +1574,8 @@
       });
       function openCompareView() {
         const paths = state.selection.filter(isImagePath);
-        if (paths.length < 2) { toast('Select 2–6 image files to compare.'); return; }
-        if (paths.length > 6) toast('Compare shows up to 6 images at once — showing the first 6.');
+        if (paths.length < 2) { toast('Select 2–6 image files to compare.', 'notice'); return; }
+        if (paths.length > 6) toast('Compare shows up to 6 images at once — showing the first 6.', 'notice');
         state.comparePaths = paths.slice(0, 6);
         state.viewMode = 'viewer';
       }
@@ -1668,7 +1672,7 @@
       }
       async function exportContactSheet() {
         const sheet = activeTab.value.sheet;
-        if (!sheet.selected.length) { toast('Select at least one image for the sheet.'); return; }
+        if (!sheet.selected.length) { toast('Select at least one image for the sheet.', 'notice'); return; }
         const { w, h } = sheetPageDims(sheet);
         const grid = sheetGrid.value;
         const pages = sheetPages.value.map((pg) => pg.map((p) => ({ path: p })));
@@ -1682,7 +1686,7 @@
           });
           if (result.canceled) return;
           toast(`Exported ${result.pages} page${result.pages === 1 ? '' : 's'} to ${shortenPath(result.path)}`);
-        } catch (e) { toast(e.message); } finally {
+        } catch (e) { toast(e.message, 'error'); } finally {
           state.sheetExport.active = false;
         }
       }
@@ -1773,7 +1777,7 @@
         if (!tab || !tab.rootDir) return;
         tab.folderFilter = state.folderFilter;
         tabSnapshots.delete(tab.rootDir);
-        toast('Rescanning folder…');
+        toast('Rescanning folder…', 'notice');
         await activateTab(tab);
       }
       async function selectTab(id) {
@@ -1996,7 +2000,7 @@
       // ---------- undo ----------
       async function undo() {
         const action = state.undoStack.pop();
-        if (!action) { toast('Nothing to undo.'); return; }
+        if (!action) { toast('Nothing to undo.', 'notice'); return; }
         if (action.type === 'tags') {
           const f = state.files.get(action.path);
           if (f) {
@@ -2087,14 +2091,14 @@
         if (e.metaKey && e.key.toLowerCase() === 'r' && e.shiftKey) { e.preventDefault(); if (state.selection.length) state.renameDialogOpen = true; return; }
         if (e.metaKey && e.key.toLowerCase() === 'r') { e.preventDefault(); if (activePath.value) startInlineRename(activePath.value); return; }
         if (e.metaKey && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateFiles(state.selection); return; }
-        if (e.metaKey && e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); toast('Parent folder navigation isn’t available — choose a folder to change roots.'); return; }
+        if (e.metaKey && e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); toast('Parent folder navigation isn’t available — choose a folder to change roots.', 'notice'); return; }
         if (e.metaKey && e.altKey && e.key.toLowerCase() === 'm') { e.preventDefault(); moveOrCopySelection('move'); return; }
         if (e.metaKey && e.altKey && e.key.toLowerCase() === 'c') { e.preventDefault(); moveOrCopySelection('copy'); return; }
         if (e.metaKey && e.key === 'Backspace') { e.preventDefault(); if (state.selection.length) state.cleanupDialogOpen = true; return; }
         if (e.metaKey && e.key.toLowerCase() === 'o' && e.shiftKey) { e.preventDefault(); if (activePath.value) revealInFinder(activePath.value); return; }
         if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveRotationsToDisk(); return; }
         if (e.metaKey && e.key === 'z') { e.preventDefault(); undo(); return; }
-        if (e.metaKey && e.key === ',') { e.preventDefault(); toast('Preferences aren’t implemented in this pass.'); return; }
+        if (e.metaKey && e.key === ',') { e.preventDefault(); toast('Preferences aren’t implemented in this pass.', 'notice'); return; }
         if (e.metaKey && e.altKey && ['1', '2'].includes(e.key)) {
           e.preventDefault();
           state.sortMode = e.key === '1' ? 'name' : 'date';
@@ -2893,7 +2897,7 @@
                        :remaining="state.conflictPrompt.remaining" :mode="state.conflictPrompt.mode"
                        @choose="answerConflict" @cancel="answerConflict(null)"></conflict-dialog>
 
-      <toast :message="state.toastMessage"></toast>
+      <toast :message="state.toastMessage" :kind="state.toastKind"></toast>
     </div>`,
   };
 
