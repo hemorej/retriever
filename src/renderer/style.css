@@ -446,12 +446,13 @@ body {
 .view-switch .opt.active { background: var(--accent); color: var(--accent-on-fill); }
 
 .sheet-preview { flex: 1; min-width: 0; background: var(--bg-viewer); padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; overflow: auto; }
-.sheet-page { width: 380px; box-shadow: 0 22px 60px -22px rgba(0, 0, 0, .95); padding: 18px; box-sizing: border-box; flex: none; }
-.sheet-grid { width: 100%; height: 100%; display: grid; gap: 7px; }
+.sheet-stage { flex: 1; min-height: 300px; width: 100%; container-type: size; display: grid; place-items: center; }
+.sheet-page { --pw: min(100cqw, calc(100cqh * var(--ar))); width: var(--pw); box-shadow: 0 22px 60px -22px rgba(0, 0, 0, .95); padding: calc(var(--pw) * 18 / 380); box-sizing: border-box; container-type: inline-size; }
+.sheet-grid { width: 100%; height: 100%; display: grid; gap: calc(100cqw * 7 / 380); }
 .sheet-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 2px; }
 .sheet-cell-thumb { flex: 1; min-height: 0; box-sizing: border-box; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .sheet-cell-thumb img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
-.sheet-cap { font-family: 'Fira Mono', monospace; font-size: 6.5px; line-height: 1.2; color: #b5b2af; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-cap { font-family: 'Fira Mono', monospace; font-size: calc(100cqw * 6.5 / 380); line-height: 1.2; color: #b5b2af; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-paginator { display: flex; align-items: center; gap: 12px; font-size: 11px; font-family: var(--font-mono); color: var(--text-label-2); flex: none; }
 .pg-btn { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; background: var(--bg-control); cursor: pointer; color: var(--text-secondary); }
 .pg-btn.disabled { background: var(--bg-raised); color: var(--text-label); cursor: default; pointer-events: none; }
