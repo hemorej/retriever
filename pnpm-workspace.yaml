@@ -17,6 +17,6 @@ minimumReleaseAge: 4320
 # minimumReleaseAgeExclude:
 #   - some-package
 
-# Security override for transitive dep flagged by Dependabot.
 overrides:
-  source-map-js: '^1.2.2'
+  minimatch@9: '^11.0.1'
+  minimatch@10: '^11.0.1'
