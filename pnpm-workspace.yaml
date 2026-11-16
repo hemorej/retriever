@@ -16,3 +16,7 @@ minimumReleaseAge: 4320
 # patches you've manually verified): add the package name here.
 # minimumReleaseAgeExclude:
 #   - some-package
+
+overrides:
+  minimatch@9: '^11.0.1'
+  minimatch@10: '^11.0.1'
