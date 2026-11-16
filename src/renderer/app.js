@@ -2756,14 +2756,14 @@
           </div>
 
           <div class="sheet-preview">
-            <div class="sheet-page" :style="{ aspectRatio: sheetDims.w + ' / ' + sheetDims.h, background: activeTab.sheet.bg }">
+            <div class="sheet-stage"><div class="sheet-page" :style="{ '--ar': sheetDims.w / sheetDims.h, aspectRatio: sheetDims.w + ' / ' + sheetDims.h, background: activeTab.sheet.bg }">
               <div class="sheet-grid" :style="{ gridTemplateColumns: 'repeat(' + sheetGrid.cols + ', 1fr)', gridTemplateRows: 'repeat(' + sheetGrid.rows + ', 1fr)' }">
                 <div class="sheet-cell" v-for="f in sheetCurrentPageFiles" :key="f.path">
                   <div class="sheet-cell-thumb"><img :src="gridThumbSrc(f.path)" /></div>
                   <div class="sheet-cap" v-if="activeTab.sheet.captionOn" :style="{ color: activeTab.sheet.captionColor }">{{ stripExt(f.name) }}</div>
                 </div>
               </div>
-            </div>
+            </div></div>
             <div class="sheet-paginator">
               <div class="pg-btn" :class="{ disabled: activeTab.sheet.page <= 1 }" @click="sheetStepPage(-1)">‹</div>
               <span>Page <input class="pg-num" :value="activeTab.sheet.page" @change="activeTab.sheet.page = Math.min(Math.max(1, Number($event.target.value) || 1), sheetPages.length)" /> of {{ sheetPages.length }}</span>
