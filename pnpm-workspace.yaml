@@ -18,5 +18,7 @@ minimumReleaseAge: 4320
 #   - some-package
 
 overrides:
+  # tslib 2.9.1 was published by a new publisher (microsoft1es); stay on the typescript-bot release.
+  tslib: 2.8.1
   minimatch@9: '^11.0.1'
   minimatch@10: '^11.0.1'
